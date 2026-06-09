@@ -219,3 +219,9 @@ __marimo__/
 Claude.md
 .gitignore
 .vscode/settings.json
+
+# Frontend / Vite
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.eslintcache
