@@ -122,9 +122,16 @@ GitHub repository → **Settings → Secrets and variables → Actions**
 
 ### 5. lépés – Deployment indítása
 
+Hozz létre egy Pull Request-et a `main` branch-re. A deploy automatikusan elindul, amikor a PR merge-elve lesz.
+
 ```bash
-git push origin main
+git checkout -b deploy/initial-setup
+git add .
+git commit -m "Initial deployment"
+git push origin deploy/initial-setup
 ```
+
+Majd GitHub-on: **New Pull Request → merge → Actions** fül.
 
 A GitHub Actions automatikusan elindítja a deployt:
 - Ha a `backend/` mappa változott → backend deploy fut
@@ -140,12 +147,15 @@ Az első backend deploy után a Cloud Run megad egy URL-t (pl. `https://invoice-
 
 1. Másold ki ezt az URL-t a GitHub Actions logból
 2. Add hozzá GitHub Secrets-hez: `VITE_API_BASE_URL` = az URL
-3. Triggereld a frontend deployt egy kis módosítással vagy manuálisan:
+3. Hozz létre egy új PR-t a frontend újradeploy-ához:
 
 ```bash
-# Manuális trigger (workflow_dispatch hozzáadása után), vagy:
-git commit --allow-empty -m "trigger frontend deploy" && git push origin main
+git checkout -b deploy/set-frontend-url
+git commit --allow-empty -m "Set VITE_API_BASE_URL, redeploy frontend"
+git push origin deploy/set-frontend-url
 ```
+
+Majd GitHub-on: **New Pull Request → merge**.
 
 ---
 
