@@ -21,6 +21,12 @@ warn()  { echo -e "  ${YELLOW}⚠️  $1${NC}"; }
 fatal() { echo -e "\n${RED}❌ HIBA: $1${NC}\n"; exit 1; }
 
 # =============================================================================
+# 0. Előfeltételek ellenőrzése
+# =============================================================================
+command -v gcloud &>/dev/null || fatal "A Google Cloud SDK (gcloud) nincs telepítve. Telepítési útmutató: https://cloud.google.com/sdk/docs/install"
+gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null | grep -q "@" || fatal "Nincs aktív gcloud bejelentkezés. Futtasd: gcloud auth login"
+
+# =============================================================================
 # 1. Paraméterek ellenőrzése
 # =============================================================================
 step "Paraméterek ellenőrzése"
