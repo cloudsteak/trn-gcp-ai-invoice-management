@@ -11,7 +11,7 @@ import { useUpload } from './hooks/useUpload.js';
 
 function App() {
   // Fájlfeltöltés állapotkezelése
-  const { uploadedFiles, addFiles, removeFile, clearFiles } = useUpload();
+  const { uploadedFiles, addFiles, removeFile } = useUpload();
 
   // Feldolgozás állapotkezelése
   const {
