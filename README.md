@@ -185,7 +185,9 @@ npm install
 npm run dev
 ```
 
-A frontend elérhető: [http://localhost:5173](http://localhost:5173)
+A frontend elérhető: [http://localhost:3000](http://localhost:3000)
+
+> **Megjegyzés a proxyról:** fejlesztés közben a Vite dev szerver a `/api/*` kéréseket automatikusan átirányítja a `http://localhost:8000` backend felé. Ez csak lokálisan működik – Cloud Run-on a frontend közvetlenül a backend Cloud Run URL-jére hív (a `VITE_API_BASE_URL` build-time változóból), proxy nélkül.
 
 ---
 
