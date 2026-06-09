@@ -96,9 +96,9 @@ echo -n "<PROCESSOR_ID>" | gcloud secrets create invoice-gcp-processor-id --data
 
 ### 4. lépés – GitHub Secrets beállítása
 
-GitHub repository → **Settings → Secrets and variables → Actions → New repository secret**
+GitHub repository → **Settings → Secrets and variables → Actions**
 
-A script kimenetéből másold be az alábbi értékeket:
+**Secrets** (titkos értékek – nem látszanak a logban):
 
 | Secret neve | Értéke |
 |-------------|--------|
@@ -106,6 +106,17 @@ A script kimenetéből másold be az alábbi értékeket:
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/.../providers/invoice-processor-github` |
 | `GCP_SERVICE_ACCOUNT` | `invoice-processor-github@<project>.iam.gserviceaccount.com` |
 | `VITE_API_BASE_URL` | *(az első backend deploy után töltsd ki)* |
+
+**Variables** (nem titkos konfigurációs értékek – a GitHub Actions logban láthatók, bármikor szerkeszthetők):
+
+| Variable neve | Alapértelmezett érték |
+|---------------|----------------------|
+| `GCP_LOCATION` | `eu` |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` |
+| `MAX_FILE_SIZE_MB` | `20` |
+| `MAX_FILES_PER_BATCH` | `10` |
+| `UPLOAD_DIR` | `/tmp/invoices` |
+| `CORS_ORIGINS` | `*` |
 
 ---
 
