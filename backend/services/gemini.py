@@ -1,6 +1,5 @@
 # Gemini API integráció – számlaadat validáció, kiegészítés és könyvelői értékelés
 import json
-from typing import Optional
 
 import google.generativeai as genai
 

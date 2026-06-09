@@ -1,5 +1,4 @@
 # Orchestrátor – Document AI és Gemini szolgáltatások összefűzése
-import os
 import time
 from pathlib import Path
 

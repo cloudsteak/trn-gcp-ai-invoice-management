@@ -1,6 +1,5 @@
 # Fájlfeltöltési végpont – multipart/form-data fogadása és validálása
 import uuid
-import os
 from typing import List
 
 from fastapi import APIRouter, UploadFile, File, HTTPException

@@ -1,5 +1,4 @@
 # Google Cloud Document AI Invoice Parser integráció – számla adatok kinyerése
-import os
 from typing import Optional
 
 from google.cloud import documentai_v1 as documentai
