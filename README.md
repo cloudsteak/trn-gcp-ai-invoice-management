@@ -159,6 +159,34 @@ Majd GitHub-on: **New Pull Request → merge**.
 
 ---
 
+## Demo újraindítása
+
+A demo naponta többször is lefuttatható. A teardown script minden GCP erőforrást töröl, utána a setup script újra elvégez mindent.
+
+### Teardown – minden törlése
+
+```bash
+bash infra/teardown.sh <GCP_PROJECT_ID>
+```
+
+**Törli:**
+- Cloud Run service-ek (`invoice-processor-backend`, `invoice-processor-frontend`)
+- Secret Manager titkok (`invoice-gcp-processor-id`, `invoice-gemini-api-key`)
+- Workload Identity Federation pool és provider
+- Service Account (`invoice-processor-github`)
+
+> A script megerősítést kér (`igen` beírása) – véletlenszerű futtatás ellen.
+
+### Újraindítás
+
+```bash
+bash infra/setup.sh <GCP_PROJECT_ID> <GITHUB_ORG/REPO>
+```
+
+Ezután a GitHub Secrets értékeit frissíteni kell az új WIF provider és Service Account adataival (a script kiírja a végén), majd egy új PR merge-elésével indul a deployment.
+
+---
+
 ## Lokális fejlesztés
 
 ### 1. .env fájl létrehozása
