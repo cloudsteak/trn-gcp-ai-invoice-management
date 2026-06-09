@@ -80,6 +80,7 @@ jobs:
       - name: Lint Backend
         working-directory: backend
         run: |
+          uv run ruff check --fix .
           uv run ruff check .
 
   deploy-backend:
