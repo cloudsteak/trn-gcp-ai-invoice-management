@@ -12,7 +12,7 @@ from services.exporter import (
     generate_csv,
     generate_xlsx_accounting,
 )
-from routers.process import jobs
+from routers.process import _jobs as jobs
 from utils.logger import get_logger
 
 router = APIRouter()

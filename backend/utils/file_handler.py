@@ -32,11 +32,12 @@ async def validate_file(file: UploadFile, settings) -> None:
     if file.filename and "." in file.filename:
         extension = file.filename.rsplit(".", 1)[-1].lower()
 
-    if extension not in settings.allowed_extensions:
+    allowed = settings.get_allowed_extensions()
+    if extension not in allowed:
         raise HTTPException(
             status_code=400,
             detail=f"Nem engedélyezett fájltípus: .{extension}. "
-                   f"Engedélyezettek: {', '.join(settings.allowed_extensions)}",
+                   f"Engedélyezettek: {', '.join(allowed)}",
         )
 
     # MIME type ellenőrzése (kiterjesztés alapú fallback)
