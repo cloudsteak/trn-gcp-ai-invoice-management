@@ -87,12 +87,8 @@ jobs:
   deploy-backend:
     name: Deploy Backend
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' &&
-      (
-        contains(github.event.head_commit.modified, 'backend/') ||
-        contains(github.event.head_commit.added, 'backend/')
-      )
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.backend == 'true'
     permissions:
       contents: read
       id-token: write
@@ -128,12 +124,8 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' &&
-      (
-        contains(github.event.head_commit.modified, 'frontend/') ||
-        contains(github.event.head_commit.added, 'frontend/')
-      )
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.frontend == 'true'
     permissions:
       contents: read
       id-token: write
