@@ -151,21 +151,41 @@ git commit --allow-empty -m "trigger frontend deploy" && git push origin main
 
 ## Lokális fejlesztés
 
+### 1. .env fájl létrehozása
+
 ```bash
-# .env fájl létrehozása a sablon alapján
-cp .env.example .env
-# Töltsd ki a .env értékeit
+cp .env.example backend/.env
+```
 
-# Backend
+Nyisd meg a `backend/.env` fájlt és töltsd ki a kötelező értékeket:
+
+| Változó | Hol szerzed meg |
+|---------|----------------|
+| `GCP_PROJECT_ID` | GCP Console → projekt azonosító |
+| `GCP_PROCESSOR_ID` | Document AI → processzor részletek → Processor ID |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
+
+> A többi értéknek van alapértelmezése – lokális teszteléshez nem kell módosítani.
+
+### 2. Backend indítása
+
+```bash
 cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uv sync
+uv run uvicorn main:app --reload --port 8000
+```
 
-# Frontend (új terminálban)
+Az API dokumentáció elérhető: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### 3. Frontend indítása (új terminálban)
+
+```bash
 cd frontend
 npm install
 npm run dev
 ```
+
+A frontend elérhető: [http://localhost:5173](http://localhost:5173)
 
 ---
 
