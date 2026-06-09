@@ -72,17 +72,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
-          python-version: '3.12'
+          version: "latest"
 
       - name: Lint Backend
         working-directory: backend
         run: |
-          python -m pip install --upgrade pip
-          pip install ruff
-          ruff check .
+          uv run ruff check .
 
   deploy-backend:
     name: Deploy Backend
@@ -115,10 +113,15 @@ jobs:
             --min-instances=0
             --max-instances=5
           env_vars: |
-            GCP_LOCATION=eu
+            GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+            GCP_LOCATION=${{ vars.GCP_LOCATION }}
+            GEMINI_MODEL=${{ vars.GEMINI_MODEL }}
+            MAX_FILE_SIZE_MB=${{ vars.MAX_FILE_SIZE_MB }}
+            MAX_FILES_PER_BATCH=${{ vars.MAX_FILES_PER_BATCH }}
+            UPLOAD_DIR=${{ vars.UPLOAD_DIR }}
+            CORS_ORIGINS=${{ vars.CORS_ORIGINS }}
           secrets: |
-            GCP_PROJECT_ID=invoice-gcp-project-id:latest
-            GCP_PROCESSOR_ID=invoice-processor-id:latest
+            GCP_PROCESSOR_ID=invoice-gcp-processor-id:latest
             GEMINI_API_KEY=invoice-gemini-api-key:latest
 
   deploy-frontend:
@@ -151,5 +154,5 @@ jobs:
             --cpu=1
             --min-instances=0
             --max-instances=3
-          env_vars: |
+          build_environment_variables: |
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
