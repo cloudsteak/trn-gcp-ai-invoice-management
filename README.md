@@ -197,7 +197,7 @@ flowchart LR
 
     subgraph GCP["☁️ GCP production – egyszeri + automatikus"]
         S1["1. setup.sh<br/>infrastruktúra"] --> S2["2. setup-wif.sh<br/>GitHub WIF"]
-        S2 --> S3["3. GitHub Secrets"]
+        S2 --> S3["3. setup-github.sh<br/>GitHub secrets"]
         S3 --> S4["4. push → main"]
         S4 --> S5["deploy.yml"]
     end
@@ -211,8 +211,11 @@ flowchart LR
 |-------|--------|--------------|------------|
 | Infrastruktúra (API-k, SA, Secrets, üres Cloud Run) | `scripts/setup.sh` | GCP erőforrások – **nem** az alkalmazás kódját | Egyszer, projekt elején |
 | GitHub Actions WIF | `scripts/setup-wif.sh` | Kulcs nélküli CI hitelesítés | Egyszer, `setup.sh` után |
+| GitHub Secrets + Variables | `scripts/setup-github.sh` | Repository secrets/variables (`gh` CLI) | Egyszer, `setup-wif.sh` után |
 | Alkalmazás kód | **GitHub Actions** `deploy.yml` | Forráskód → Cloud Run | Minden `main` push |
 | Lint ellenőrzés | GitHub Actions `lint.yml` | Kódminőség PR-en | Minden pull request |
+| Demo törlése (GCP) | `scripts/teardown.sh` → `teardown-wif.sh` | Cloud Run, Secret Manager, SA, WIF | Demo újraindításkor |
+| Demo törlése (GitHub) | `scripts/teardown-github.sh` | Repository secrets + variables | `teardown-wif.sh` után |
 
 > **Fontos:** A Cloud Run-ra való telepítés **alapértelmezetten a GitHub Actions-szel történik**. A `setup.sh` csak az infrastruktúrát készíti elő.
 
@@ -285,7 +288,7 @@ cd frontend && npm install && npm run lint && npm run build
 ```
 1. setup.sh          →  GCP infrastruktúra (egyszer)
 2. setup-wif.sh      →  GitHub Actions WIF (egyszer, JSON kulcs nélkül)
-3. GitHub Secrets    →  WIF provider + service account azonosítók
+3. setup-github.sh   →  GitHub Secrets + Variables (gh CLI)
 4. git push main     →  alkalmazás deploy (automatikus, deploy.yml)
 5. tesztelés         →  Cloud Run URL-eken
 ```
@@ -319,7 +322,9 @@ export GITHUB_REPO=<szervezet>/<repo-nev>
 ./scripts/setup-wif.sh
 ```
 
-A script a végén kiírja a **GitHub Secrets** értékeket és a környezeti változókhoz szükséges `export` sorokat. Ha a `setup.sh` már lefutott, a **`VITE_API_BASE_URL`** is megjelenik (a backend placeholder Cloud Run URL-je – ez megegyezik a GCP konzollal):
+A script a végén kiírja a **GitHub Secrets** értékeket (manuális beállításhoz). Automatikus beállításhoz futtasd a **`setup-github.sh`** scriptet a WIF setup után (lásd alább).
+
+Ha a `setup.sh` már lefutott, a **`VITE_API_BASE_URL`** is megjelenik (a backend placeholder Cloud Run URL-je – ez megegyezik a GCP konzollal):
 
 ```text
 https://invoice-processor-backend-<PROJECT_NUMBER>.europe-west1.run.app
@@ -327,16 +332,43 @@ https://invoice-processor-backend-<PROJECT_NUMBER>.europe-west1.run.app
 
 > **Megjegyzés:** A `gcloud run services describe --format='value(status.url)'` régi `*.a.run.app` címet adhat vissza; a setup scriptek a konzollal egyező `*.REGION.run.app` formátumot használják.
 
-**GitHub Secrets** (Settings → Secrets and variables → Actions):
+| Service account | Szerep |
+|-----------------|--------|
+| `invoice-processor-sa` | App futtatás, Document AI, Vertex AI (Gemini), Secret Manager olvasás |
+| `invoice-processor-cicd-sa` | Deploy GitHub Actions-ből (WIF) |
+
+#### 3. GitHub Secrets és Variables – `setup-github.sh`
+
+A WIF és a Cloud Run placeholder service-ek után a repository secrets/variables értékeit a **`gh` CLI** állítja be:
+
+```bash
+export GCP_PROJECT_ID=<a-gcp-projekt-id>
+export GITHUB_REPO=<szervezet>/<repo-nev>   # opcionális, ha a repo gyökeréből futtatod
+./scripts/setup-github.sh
+# vagy megerősítés nélkül: ./scripts/setup-github.sh --yes
+# csak secrets (variables nélkül): ./scripts/setup-github.sh --secrets-only
+```
+
+| Előfeltétel | Leírás |
+|-------------|--------|
+| `setup.sh` + `setup-wif.sh` | Már lefutott |
+| `gh auth login` | Repo admin jog kell |
+| `GITHUB_REPO` | Automatikusan felismeri, ha a klónból fut |
+
+A script a GCP-ből számolja ki a WIF provider és CI/CD SA értékeket; a backend URL-t a Cloud Run service alapján. A variables alapértelmezései megegyeznek a `deploy.yml`-ével – felülírhatók környezeti változókkal (pl. `GEMINI_MODEL=...`).
+
+Manuális beállítás is lehetséges (Settings → Secrets and variables → Actions). A demo végén a [`teardown-github.sh`](#6-erőforrások-törlése-demo-újraindítás) törli ezeket.
+
+**GitHub Secrets:**
 
 | Secret | Leírás |
 |--------|--------|
 | `GCP_PROJECT_ID` | GCP projekt azonosító |
 | `GCP_WIF_PROVIDER` | WIF provider teljes resource neve |
 | `GCP_WIF_SERVICE_ACCOUNT` | `invoice-processor-cicd-sa@...` e-mail |
-| `VITE_API_BASE_URL` | Backend Cloud Run URL – a `setup-wif.sh` kiírja, ha a backend service már létezik (`setup.sh` után) |
+| `VITE_API_BASE_URL` | Backend Cloud Run URL – a `setup.sh` után elérhető |
 
-**GitHub Variables** (opcionális):
+**GitHub Variables** (opcionális – a `setup-github.sh` alapértelmezésekkel beállítja):
 
 | Variable | Alapértelmezés |
 |----------|----------------|
@@ -348,12 +380,7 @@ https://invoice-processor-backend-<PROJECT_NUMBER>.europe-west1.run.app
 | `UPLOAD_DIR` | `/tmp/invoices` |
 | `CORS_ORIGINS` | `*` |
 
-| Service account | Szerep |
-|-----------------|--------|
-| `invoice-processor-sa` | App futtatás, Document AI, Vertex AI (Gemini), Secret Manager olvasás |
-| `invoice-processor-cicd-sa` | Deploy GitHub Actions-ből (WIF) |
-
-#### 3. Alkalmazás deploy – GitHub Actions
+#### 4. Alkalmazás deploy – GitHub Actions
 
 ```bash
 git push origin main
@@ -361,7 +388,7 @@ git push origin main
 
 Ellenőrzés: GitHub → **Actions** fül.
 
-#### 4. GCP tesztelés
+#### 5. GCP tesztelés
 
 A setup scriptek által kiírt URL-eket használd, vagy számítsd ki a konzol formátumát:
 
@@ -378,7 +405,17 @@ echo "Nyisd meg: ${FRONTEND_URL}"
 
 > Az első deploy után a `/health` működik; a `setup.sh` placeholder image-jén még a Cloud Run „Congratulations” oldal jelenik meg.
 
-#### 5. Erőforrások törlése (demo újraindítás)
+#### 6. Erőforrások törlése (demo újraindítás)
+
+A setup lépések **fordított sorrendben** futtatandók: először a GCP runtime, majd a CI/CD WIF, végül a GitHub repó beállításai.
+
+```mermaid
+flowchart LR
+    T1["1. teardown.sh<br/>Cloud Run, SM, runtime SA"] --> T2["2. teardown-wif.sh<br/>WIF pool, CI/CD SA"]
+    T2 --> T3["3. teardown-github.sh<br/>GitHub secrets + variables"]
+```
+
+**1–2. GCP erőforrások** (`gcloud` CLI):
 
 ```bash
 export GCP_PROJECT_ID=<a-gcp-projekt-id>
@@ -386,6 +423,52 @@ export GITHUB_REPO=<szervezet>/<repo-nev>
 ./scripts/teardown.sh
 ./scripts/teardown-wif.sh
 ```
+
+| Script | Mit töröl? |
+|--------|------------|
+| `teardown.sh` | Cloud Run service-ek, Secret Manager titkok, runtime service account (`invoice-processor-sa`) |
+| `teardown-wif.sh` | WIF pool + provider, CI/CD service account (`invoice-processor-cicd-sa`), deploy IAM |
+
+**3. GitHub repó beállítások** (`gh` CLI):
+
+```bash
+export GITHUB_REPO=<szervezet>/<repo-nev>   # opcionális, ha a repo gyökeréből futtatod
+./scripts/teardown-github.sh
+# vagy megerősítés nélkül: ./scripts/teardown-github.sh --yes
+```
+
+| Előfeltétel | Leírás |
+|-------------|--------|
+| `gh` CLI | [Telepítés](https://cli.github.com/) |
+| `gh auth login` | Bejelentkezés, repo admin jog kell |
+| `GITHUB_REPO` | `org/repo` formátum – automatikusan felismeri, ha a repó klónjából fut |
+
+A script **csak a létező** értékeket törli (idempotens). A `--yes` kapcsoló vagy `AUTO_YES=true` kihagyja az interaktív megerősítést.
+
+**Törölt GitHub Secrets:**
+
+| Secret | Megjegyzés |
+|--------|------------|
+| `GCP_PROJECT_ID` | Setup során beállítva |
+| `GCP_WIF_PROVIDER` | WIF provider resource név |
+| `GCP_WIF_SERVICE_ACCOUNT` | CI/CD SA e-mail |
+| `VITE_API_BASE_URL` | Backend Cloud Run URL |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Régi név (ha még létezik) |
+| `GCP_SERVICE_ACCOUNT` | Régi név (ha még létezik) |
+
+**Törölt GitHub Variables** (ha be lettek állítva):
+
+| Variable | Alapértelmezés a `deploy.yml`-ben |
+|----------|-----------------------------------|
+| `GCP_LOCATION` | `eu` |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` |
+| `GEMINI_LOCATION` | `global` |
+| `MAX_FILE_SIZE_MB` | `20` |
+| `MAX_FILES_PER_BATCH` | `10` |
+| `UPLOAD_DIR` | `/tmp/invoices` |
+| `CORS_ORIGINS` | `*` |
+
+> **Megjegyzés:** A teljes demo újraindításhoz a fenti három script sorrendben futtatandó, majd újra `setup.sh` → `setup-wif.sh` → `setup-github.sh` → `git push main`.
 
 ### Működik-e?
 
@@ -395,7 +478,7 @@ export GITHUB_REPO=<szervezet>/<repo-nev>
 | Backend lint | ✅ | Független a GCP-től |
 | `/health` helyben | ✅ | GCP konfiguráció nélkül is |
 | Számla feldolgozás helyben | ⚠️ GCP kell | ADC + Document AI processzor + `roles/aiplatform.user` |
-| GCP deploy | ⚠️ CI-vel | `setup.sh` + `setup-wif.sh` + `git push main` |
+| GCP deploy | ⚠️ CI-vel | `setup.sh` + `setup-wif.sh` + `setup-github.sh` + `git push main` |
 
 ### Projekt struktúra
 
@@ -409,7 +492,7 @@ trn-gcp-ai-invoice-management/
 ├── frontend/          # React + Vite UI
 │   └── .env.example   # Frontend (Vite) környezeti változók sablonja
 ├── invoices/          # Fiktív demó számlák (PDF, JPG)
-├── scripts/           # setup.sh, setup-wif.sh, lib.sh, teardown.sh, teardown-wif.sh
+├── scripts/           # setup*.sh, lib.sh, teardown*.sh
 ├── .github/workflows/ # lint.yml, deploy.yml
 ```
 
