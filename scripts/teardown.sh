@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib.sh
+source "${SCRIPT_DIR}/lib.sh"
+
 PROJECT_ID="${GCP_PROJECT_ID:-${GOOGLE_CLOUD_PROJECT:-}}"
 REGION="${GCP_REGION:-europe-west1}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-invoice-processor-backend}"
@@ -16,15 +20,18 @@ fi
 echo "GCP projekt beallitasa: ${PROJECT_ID}"
 gcloud config set project "${PROJECT_ID}"
 
+PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+CLOUDBUILD_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+
 echo "Cloud Run backend service torlese..."
-if gcloud run services describe "${BACKEND_SERVICE}" --region="${REGION}" >/dev/null 2>&1; then
+if cloud_run_service_exists "${BACKEND_SERVICE}" "${REGION}"; then
   gcloud run services delete "${BACKEND_SERVICE}" --region="${REGION}" --quiet
 else
   echo "A backend service nem letezik, kihagyva."
 fi
 
 echo "Cloud Run frontend service torlese..."
-if gcloud run services describe "${FRONTEND_SERVICE}" --region="${REGION}" >/dev/null 2>&1; then
+if cloud_run_service_exists "${FRONTEND_SERVICE}" "${REGION}"; then
   gcloud run services delete "${FRONTEND_SERVICE}" --region="${REGION}" --quiet
 else
   echo "A frontend service nem letezik, kihagyva."
@@ -40,13 +47,21 @@ for secret in invoice-gcp-processor-id; do
   fi
 done
 
-echo "Service account IAM koteseinek torlese..."
+echo "Service account IAM koteseinek torlese (${SERVICE_ACCOUNT})..."
 for role in roles/documentai.apiUser roles/secretmanager.secretAccessor roles/aiplatform.user; do
   gcloud projects remove-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="${role}" \
-    --quiet || true
+    --quiet 2>/dev/null || true
 done
+
+echo "Cloud Build SA IAM koteseinek torlese..."
+if gcloud iam service-accounts describe "${CLOUDBUILD_SA}" >/dev/null 2>&1; then
+  gcloud projects remove-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${CLOUDBUILD_SA}" \
+    --role="roles/secretmanager.secretAccessor" \
+    --quiet 2>/dev/null || true
+fi
 
 echo "Service account torlese..."
 if gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1; then
@@ -55,4 +70,6 @@ else
   echo "A service account nem letezik, kihagyva."
 fi
 
-echo "Teardown kesz."
+echo ""
+echo "Teardown kesz (runtime infrastruktura)."
+echo "Kovetkezo lepes: ./scripts/teardown-wif.sh (GitHub Actions WIF + CI/CD SA)"
