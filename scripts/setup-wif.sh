@@ -57,6 +57,7 @@ CLOUDBUILD_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
 
 echo "Deploy jogosultsagok hozzarendelese a CI/CD service accounthoz..."
 for role in \
+  roles/run.admin \
   roles/run.sourceDeveloper \
   roles/run.builder \
   roles/cloudbuild.builds.builder \
