@@ -101,6 +101,21 @@ else
     --quiet
 fi
 
+echo "Nyilvanos hozzaferes (allUsers invoker) – szukseges a --allow-unauthenticated deploy-hoz..."
+for SVC in "${BACKEND_SERVICE}" "${FRONTEND_SERVICE}"; do
+  if cloud_run_service_exists "${SVC}" "${REGION}"; then
+    if gcloud run services add-iam-policy-binding "${SVC}" \
+      --region="${REGION}" \
+      --member="allUsers" \
+      --role="roles/run.invoker" \
+      --quiet 2>/dev/null; then
+      echo "  OK: ${SVC}"
+    else
+      echo "  Figyelem: ${SVC} – allUsers IAM nem sikerult (org policy?)"
+    fi
+  fi
+done
+
 BACKEND_URL=""
 FRONTEND_URL=""
 if cloud_run_service_exists "${BACKEND_SERVICE}" "${REGION}"; then
