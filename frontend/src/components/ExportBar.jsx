@@ -4,16 +4,19 @@ import { downloadExport } from '../services/api.js';
 
 /**
  * Props:
- *   jobId – az aktuális feldolgozási job azonosítója
+ *   results – feldolgozott számlák (közvetlen export)
+ *   jobId   – opcionális fallback egyetlen job-hoz
  */
-function ExportBar({ jobId }) {
-  const [loading, setLoading] = useState(null); // Melyik export tölt éppen
+function ExportBar({ results = [], jobId }) {
+  const [loading, setLoading] = useState(null);
+
+  const canExport = results.length > 0 || jobId;
 
   const handleExport = async (format) => {
-    if (!jobId || loading) return;
+    if (!canExport || loading) return;
     setLoading(format);
     try {
-      await downloadExport(jobId, format);
+      await downloadExport(format, { results, jobId });
     } catch (err) {
       alert('Letöltési hiba: ' + (err.message || 'Ismeretlen hiba'));
     } finally {
@@ -31,7 +34,7 @@ function ExportBar({ jobId }) {
       {/* PDF export */}
       <button
         onClick={() => handleExport('pdf')}
-        disabled={!jobId || !!loading}
+        disabled={!canExport || !!loading}
         className={`${buttonBase} bg-red-100 text-red-700 hover:bg-red-200`}
       >
         {loading === 'pdf' ? '⏳' : '📄'} PDF
@@ -40,7 +43,7 @@ function ExportBar({ jobId }) {
       {/* XLSX export */}
       <button
         onClick={() => handleExport('xlsx')}
-        disabled={!jobId || !!loading}
+        disabled={!canExport || !!loading}
         className={`${buttonBase} bg-green-100 text-green-700 hover:bg-green-200`}
       >
         {loading === 'xlsx' ? '⏳' : '📊'} XLSX
@@ -49,7 +52,7 @@ function ExportBar({ jobId }) {
       {/* CSV export */}
       <button
         onClick={() => handleExport('csv')}
-        disabled={!jobId || !!loading}
+        disabled={!canExport || !!loading}
         className={`${buttonBase} bg-gray-100 text-gray-700 hover:bg-gray-200`}
       >
         {loading === 'csv' ? '⏳' : '📋'} CSV
@@ -58,7 +61,7 @@ function ExportBar({ jobId }) {
       {/* Könyvelői adatlap – vizuálisan elkülönített, ez a fő könyvelési export */}
       <button
         onClick={() => handleExport('xlsx-accounting')}
-        disabled={!jobId || !!loading}
+        disabled={!canExport || !!loading}
         className={`${buttonBase} bg-blue-600 text-white hover:bg-blue-700 ml-2 shadow-sm`}
       >
         {loading === 'xlsx-accounting' ? '⏳' : '🧾'} Könyvelői adatlap

@@ -7,13 +7,30 @@ import React from 'react';
  * Props:
  *   files    – feltöltött fájlok tömbje { file_id, file_name, status, size? }
  *   onRemove(fileId) – fájl törlésének callback-je
+ *   onClearAll() – összes fájl törlése
  *   disabled – letiltja a törlést feldolgozás alatt
+ *   clearing – törlés folyamatban
  */
-function FileList({ files = [], onRemove, disabled = false }) {
+function FileList({ files = [], onRemove, onClearAll, disabled = false, clearing = false }) {
   if (!files.length) return null;
 
   return (
     <div className="overflow-x-auto">
+      <div className="flex items-center justify-between mb-2 px-1">
+        <span className="text-sm text-gray-500">
+          {files.length} fájl feltöltve
+        </span>
+        {!disabled && onClearAll && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            disabled={clearing}
+            className="text-sm text-red-600 hover:text-red-800 disabled:text-gray-400 transition-colors"
+          >
+            {clearing ? 'Törlés...' : '🗑️ Összes törlése'}
+          </button>
+        )}
+      </div>
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-gray-100 text-gray-600 text-left">

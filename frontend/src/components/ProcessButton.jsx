@@ -27,7 +27,7 @@ function ProcessButton({ onClick, disabled = false, loading = false }) {
         </>
       ) : (
         <>
-          <span>⚙️</span>
+          <span aria-hidden="true">▶️</span>
           Feldolgozás indítása
         </>
       )}

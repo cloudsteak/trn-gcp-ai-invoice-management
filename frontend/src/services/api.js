@@ -26,6 +26,16 @@ export async function uploadFiles(files) {
 }
 
 /**
+ * Feltöltött fájlok törlése a szerverről (feldolgozás előtt).
+ *
+ * @param {string[]} fileIds – UUID azonosítók tömbje
+ */
+export async function deleteUploadedFiles(fileIds) {
+  const response = await client.post('/api/upload/delete', { file_ids: fileIds });
+  return response.data;
+}
+
+/**
  * Batch feldolgozás indítása a feltöltött fájlok azonosítóival.
  *
  * @param {string[]} fileIds – UUID azonosítók tömbje
@@ -48,15 +58,17 @@ export async function getProcessingStatus(jobId) {
 }
 
 /**
- * Export letöltése és automatikus mentés a böngészőben.
+ * Export letöltése – job_id vagy közvetlenül a frontend eredménylistából.
  *
- * @param {string} jobId – a job azonosítója
- * @param {'pdf'|'xlsx'|'csv'|'xlsx-accounting'} format – export formátum
+ * @param {'pdf'|'xlsx'|'csv'|'xlsx-accounting'} format
+ * @param {{ jobId?: string, results?: object[] }} options
  */
-export async function downloadExport(jobId, format) {
+export async function downloadExport(format, { jobId, results } = {}) {
+  const body = results?.length ? { results } : { job_id: jobId };
+
   const response = await client.post(
     `/api/export/${format}`,
-    { job_id: jobId },
+    body,
     { responseType: 'blob' }
   );
 
