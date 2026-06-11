@@ -1,2 +1,442 @@
-# trn-gcp-ai-invoice-management
-Intelligens számlafeldolgozó a Document AI és Gemini API kombinációjával
+# Intelligens Számlafeldolgozó
+
+PDF és képfájl alapú számlák automatikus feldolgozása a **Google Cloud Document AI Invoice Parser** és a **Gemini API** kombinációjával. A rendszer strukturált adatokat nyer ki, validál, könyvelői értékelést készít, és exportál PDF / XLSX / CSV formátumban.
+
+## Tartalom
+
+1. [Általános ismerető](#1-általános-ismerető) *(ez a szekció)*
+2. [Számla feldolgozás Document AI-val](#2-számla-feldolgozás-document-ai-val)
+3. [Validáció és kiegészítés Gemini AI Studioval](#3-validáció-és-kiegészítés-gemini-ai-studioval)
+4. [Skálázható felhő alapú megoldás](#4-skálázható-felhő-alapú-megoldás)
+
+---
+
+## 1. Általános ismerető
+
+Ez a projekt **három alap módon** mutatja be ugyanazt a számlafeldolgozási feladatot:
+
+| Módszer | Célcsoport | Infrastruktúra |
+|---------|------------|----------------|
+| **Document AI Console** | Gyors kipróbálás, egyedi számlák | GCP Console – Invoice Parser processzor |
+| **Gemini AI Studio** | Fejlesztők, prompt finomhangolás | Nincs – AI Studio + prompt |
+| **Felhő alapú alkalmazás** | Csapatok, production, batch feldolgozás | GCP Cloud Run + GitHub Actions |
+
+A teljes alkalmazás **Document AI + Gemini** pipeline-t használ:
+
+1. **Document AI** – strukturált adatkinyerés (partner, összegek, dátumok, tételek)
+2. **Gemini** – hiányzó mezők pótlása, ÁFA-validáció, anomália-detektálás, könyvelői értékelés
+3. **Export** – PDF / XLSX / CSV / könyvelői adatlap
+
+---
+
+## 2. Számla feldolgozás Document AI-val
+
+A Google Cloud Document AI **Invoice Parser** processzorával közvetlenül a GCP Console-ban is kipróbálható a számlakinyerés – **nem kell kódot írni**.
+
+### Előfeltételek
+
+- GCP projekt, számlázás engedélyezve
+- `documentai.googleapis.com` API engedélyezve
+- Számla **PDF vagy kép** formátumban
+
+### Lépések
+
+1. Nyisd meg: [GCP Console → Document AI](https://console.cloud.google.com/ai/document-ai)
+2. **Create Processor** → **Invoice Parser** → régió: `eu`
+3. Tölts fel egy tesztszámlát a processzor teszt felületén
+4. Ellenőrizd a kinyert mezőket: `supplier_name`, `supplier_tax_id`, `invoice_date`, `net_amount`, `total_amount`, stb.
+
+### Mit tanulsz ebből?
+
+- A Document AI **előre tanított** Invoice Parser modellt használ – nincs saját ML modell tanítás
+- Strukturált entitásokat ad vissza konfidencia értékkel
+- Magyar és angol számlákon is működik (a demo batch mindkettőt tartalmazza)
+
+### Korlátok
+
+- Manuális folyamat – nincs batch feldolgozás, export, validáció
+- Hiányzó mezők nem pótlódnak automatikusan
+- Könyvelői értékelés és ÁFA-ellenőrzés nincs – ehhez a [3.](#3-validáció-és-kiegészítés-gemini-ai-studioval) vagy [4.](#4-skálázható-felhő-alapú-megoldás) szekció szükséges
+
+---
+
+## 3. Validáció és kiegészítés Gemini AI Studioval
+
+A [Google AI Studio](https://aistudio.google.com) felületen kipróbálható a Gemini-alapú validáció és könyvelői értékelés – a Document AI által kinyert JSON és a számla szövege együtt.
+
+### Előfeltételek
+
+- Google-fiók AI Studio hozzáféréssel
+- Document AI-ból kinyert adatok (JSON) vagy a számla szövege
+
+### Lépések
+
+1. Nyisd meg: [https://aistudio.google.com](https://aistudio.google.com)
+2. Válassz modellt: `gemini-3.1-flash-lite`
+3. Illeszd be az alábbi system promptot
+4. Add meg a Document AI JSON kimenetét és/vagy a számla szövegét
+5. Ellenőrizd a JSON választ: `filled_fields`, `issues`, `summary`
+
+### Validációs prompt (rövidített)
+
+```
+Te egy tapasztalt magyar könyvelő és pénzügyi ellenőr vagy.
+Egészítsd ki a hiányzó mezőket, ellenőrizd az ÁFA számítást,
+keresd az anomáliákat. Ha az eladó adószáma hiányzik, az HIBA.
+Írj 3-5 mondatos könyvelői értékelést magyarul.
+Válaszolj kizárólag JSON formátumban.
+```
+
+A teljes prompt a [`backend/services/gemini.py`](backend/services/gemini.py) fájlban van implementálva.
+
+### Mire jó ez a módszer?
+
+- **Prompt iteráció** – validációs szabályok finomhangolása
+- **Prototípus** – a felhő alkalmazás Gemini logikája innen származtatható
+- **Önálló ellenőrzés** – Document AI eredmény manuális validálása
+
+### Korlátok
+
+- Nem skálázható batch forgalomra
+- Nincs fájlfeltöltés, export, UI – ehhez a [4. szekció](#4-skálázható-felhő-alapú-megoldás) szükséges
+
+---
+
+## 4. Skálázható felhő alapú megoldás
+
+Ez a repository **production-ready** megoldást ad: React frontend, FastAPI backend, Document AI + Gemini integráció, Cloud Run deploy és GitHub Actions CI/CD.
+
+### Architektúra
+
+#### Magas szintű áttekintés
+
+```mermaid
+flowchart TB
+    User(["🌐 Felhasználó<br/>számla feltöltés · eredmény"])
+    FE["🖥️ Frontend<br/>React + Vite"]
+    BE["⚙️ Backend<br/>FastAPI"]
+
+    subgraph GCP["☁️ Google Cloud Platform"]
+        DocAI["📄 Document AI<br/>Invoice Parser"]
+        Gemini["🤖 Gemini<br/>gemini-3.1-flash-lite"]
+        SM["🔐 Secret Manager<br/>Processor ID"]
+    end
+
+    User ==>|"PDF/JPG feltöltés"| FE
+    FE ==>|"feldolgozás kérése"| BE
+    BE ==>|"számla fájl"| DocAI
+    DocAI ==>|"strukturált adatok"| BE
+    BE ==>|"validáció + kiegészítés"| Gemini
+    Gemini ==>|"issues + summary"| BE
+    BE ==>|"InvoiceResult"| FE
+    FE ==>|"táblázat + export"| User
+    SM -.-> BE
+
+    classDef user fill:#DBEAFE,stroke:#2563EB,stroke-width:3px,color:#1E3A8A
+    classDef frontend fill:#DCFCE7,stroke:#16A34A,stroke-width:2px,color:#14532D
+    classDef backend fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F
+    classDef ai fill:#F3E8FF,stroke:#9333EA,stroke-width:3px,color:#581C87
+
+    class User user
+    class FE frontend
+    class BE backend
+    class DocAI,Gemini ai
+
+    style GCP fill:#FAF5FF,stroke:#E9D5FF,stroke-width:2px
+```
+
+### Architektúra komponensek
+
+| Komponens | Technológia | Felelősség |
+|-----------|-------------|------------|
+| **Frontend** | React, Vite, TailwindCSS | Fájlfeltöltés, eredmény táblázat, export gombok |
+| **Backend** | FastAPI, uvicorn | Upload, batch feldolgozás, Document AI + Gemini orchestration |
+| **Document AI** | Invoice Parser (`eu`) | Strukturált adatkinyerés számlákból |
+| **Gemini API** | `gemini-3.1-flash-lite` (Vertex AI, global) | Validáció, mezőpótlás, könyvelői értékelés – **ADC, nincs API kulcs** |
+| **Cloud Run** | Source deploy (buildpacks) | Skálázható futtatás HTTPS-sel |
+| **Secret Manager** | GCP titkok | Document AI Processor ID |
+| **GitHub Actions** | `lint.yml`, `deploy.yml` | Lint PR-en, deploy `main`-en (WIF, kulcs nélkül) |
+
+### API végpontok
+
+| Végpont | Metódus | Leírás |
+|---------|---------|--------|
+| `/health` | GET | Health check – `{"status": "ok"}` |
+| `/api/upload` | POST | Több fájl feltöltése (multipart) |
+| `/api/process` | POST | Batch feldolgozás indítása |
+| `/api/process/{job_id}` | GET | Feldolgozás állapota és eredmények |
+| `/api/export/pdf` | POST | PDF riport letöltése |
+| `/api/export/xlsx` | POST | XLSX export |
+| `/api/export/csv` | POST | CSV export |
+| `/api/export/xlsx-accounting` | POST | Könyvelői adatlap (fix oszlopszerkezet) |
+
+### Előfeltételek
+
+| Eszköz | Miért kell? |
+|--------|-------------|
+| **Node.js** 20+ | Frontend futtatásához és buildhez |
+| **uv** ([telepítés](https://docs.astral.sh/uv/)) | Backend függőségek kezelése |
+| **gcloud CLI** | GCP infrastruktúra (`setup.sh`) és helyi ADC auth |
+| **GCP projekt** | Document AI + Cloud Run + Secret Manager |
+
+### Telepítési áttekintés
+
+| Környezet | Cél | Hogyan telepítünk? |
+|-----------|-----|---------------------|
+| **Helyi (fejlesztői gép)** | Gyors fejlesztés, hibakeresés | Kézzel: `uv` + `npm run dev` |
+| **GCP (production)** | Demo, valódi felhasználók | Automatikusan: **GitHub Actions** (`deploy.yml`) |
+
+```mermaid
+flowchart LR
+    subgraph Local["🏠 Helyi fejlesztés"]
+        L1["backend/.env"] --> L2["./dev.sh"]
+        L3["npm run dev"] --> L4["localhost:3000"]
+        L2 --> L5["API teszt"]
+        L4 --> L5
+    end
+
+    subgraph GCP["☁️ GCP production – egyszeri + automatikus"]
+        S1["1. setup.sh<br/>infrastruktúra"] --> S2["2. setup-wif.sh<br/>GitHub WIF"]
+        S2 --> S3["3. GitHub Secrets"]
+        S3 --> S4["4. push → main"]
+        S4 --> S5["deploy.yml"]
+    end
+
+    Local -.->|"kód kész, PR merge"| GCP
+```
+
+#### Ki mit csinál?
+
+| Lépés | Eszköz | Mit telepít? | Gyakoriság |
+|-------|--------|--------------|------------|
+| Infrastruktúra (API-k, SA, Secrets, üres Cloud Run) | `scripts/setup.sh` | GCP erőforrások – **nem** az alkalmazás kódját | Egyszer, projekt elején |
+| GitHub Actions WIF | `scripts/setup-wif.sh` | Kulcs nélküli CI hitelesítés | Egyszer, `setup.sh` után |
+| Alkalmazás kód | **GitHub Actions** `deploy.yml` | Forráskód → Cloud Run | Minden `main` push |
+| Lint ellenőrzés | GitHub Actions `lint.yml` | Kódminőség PR-en | Minden pull request |
+
+> **Fontos:** A Cloud Run-ra való telepítés **alapértelmezetten a GitHub Actions-szel történik**. A `setup.sh` csak az infrastruktúrát készíti elő.
+
+### Helyi telepítés és tesztelés
+
+#### 1. Backend
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+Állítsd be a `.env` fájlban:
+
+```env
+GCP_PROJECT_ID=<a-gcp-projekt-id>
+GCP_LOCATION=eu
+GCP_PROCESSOR_ID=<document-ai-processor-id>
+GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_LOCATION=global
+CORS_ORIGINS=http://localhost:3000
+```
+
+```bash
+gcloud auth application-default login
+gcloud config set project <a-gcp-projekt-id>
+uv sync
+./dev.sh
+```
+
+> **Nincs `GEMINI_API_KEY`!** A Gemini a **Vertex AI**-on fut Application Default Credentials-sel (ADC), ugyanúgy mint a contract-analyzer projektben. Helyben: `gcloud auth application-default login`. Cloud Run-on: a `invoice-processor-sa` service account (`roles/aiplatform.user`).
+
+**Health check:**
+
+```bash
+curl http://localhost:8000/health
+# {"status":"ok"}
+```
+
+| Hiba | Ok |
+|------|-----|
+| `ValidationError` induláskor | `.env` nincs kitöltve |
+| Document AI hiba | Hiányzó ADC vagy `roles/documentai.apiUser` |
+| Gemini timeout | Nincs ADC, vagy hiányzó `roles/aiplatform.user` |
+
+#### 2. Frontend
+
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Nyisd meg: [http://localhost:3000](http://localhost:3000)
+
+> Fejlesztés közben a Vite proxy a `/api/*` kéréseket a `http://localhost:8000` backend felé irányítja.
+
+#### 3. Lint ellenőrzés
+
+```bash
+cd backend && uv sync --group dev && uv run ruff check .
+cd frontend && npm install && npm run lint && npm run build
+```
+
+### GCP telepítés és tesztelés
+
+#### Telepítési sorrend (ajánlott)
+
+```
+1. setup.sh          →  GCP infrastruktúra (egyszer)
+2. setup-wif.sh      →  GitHub Actions WIF (egyszer, JSON kulcs nélkül)
+3. GitHub Secrets    →  WIF provider + service account azonosítók
+4. git push main     →  alkalmazás deploy (automatikus, deploy.yml)
+5. tesztelés         →  Cloud Run URL-eken
+```
+
+#### 1. Infrastruktúra – `setup.sh`
+
+```bash
+export GCP_PROJECT_ID=<a-gcp-projekt-id>
+./scripts/setup.sh
+```
+
+A script bekéri a **Document AI Processor ID**-t, majd Secret Manager-be menti. A végén kiírja a **Cloud Run URL-eket** (GCP konzollal egyező formátum) és copy-paste-elhető `export` parancsokat:
+
+```text
+export GCP_PROJECT_ID=...
+export GCP_REGION=europe-west1
+export BACKEND_SERVICE=invoice-processor-backend
+export FRONTEND_SERVICE=invoice-processor-frontend
+```
+
+> **Gemini:** nincs külön API kulcs – a runtime service account (`invoice-processor-sa`) hívja a Vertex AI-t ADC-vel.
+
+Document AI processzor (ha még nincs):
+1. [GCP Console → Document AI](https://console.cloud.google.com/ai/document-ai) → **Create Processor** → **Invoice Parser** → régió: `eu`
+
+#### 2. GitHub Actions hitelesítés – WIF
+
+```bash
+export GCP_PROJECT_ID=<a-gcp-projekt-id>
+export GITHUB_REPO=<szervezet>/<repo-nev>
+./scripts/setup-wif.sh
+```
+
+A script a végén kiírja a **GitHub Secrets** értékeket és a környezeti változókhoz szükséges `export` sorokat. Ha a `setup.sh` már lefutott, a **`VITE_API_BASE_URL`** is megjelenik (a backend placeholder Cloud Run URL-je – ez megegyezik a GCP konzollal):
+
+```text
+https://invoice-processor-backend-<PROJECT_NUMBER>.europe-west1.run.app
+```
+
+> **Megjegyzés:** A `gcloud run services describe --format='value(status.url)'` régi `*.a.run.app` címet adhat vissza; a setup scriptek a konzollal egyező `*.REGION.run.app` formátumot használják.
+
+**GitHub Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Leírás |
+|--------|--------|
+| `GCP_PROJECT_ID` | GCP projekt azonosító |
+| `GCP_WIF_PROVIDER` | WIF provider teljes resource neve |
+| `GCP_WIF_SERVICE_ACCOUNT` | `invoice-processor-cicd-sa@...` e-mail |
+| `VITE_API_BASE_URL` | Backend Cloud Run URL – a `setup-wif.sh` kiírja, ha a backend service már létezik (`setup.sh` után) |
+
+**GitHub Variables** (opcionális):
+
+| Variable | Alapértelmezés |
+|----------|----------------|
+| `GCP_LOCATION` | `eu` |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` |
+| `GEMINI_LOCATION` | `global` |
+| `MAX_FILE_SIZE_MB` | `20` |
+| `MAX_FILES_PER_BATCH` | `10` |
+| `UPLOAD_DIR` | `/tmp/invoices` |
+| `CORS_ORIGINS` | `*` |
+
+| Service account | Szerep |
+|-----------------|--------|
+| `invoice-processor-sa` | App futtatás, Document AI, Vertex AI (Gemini), Secret Manager olvasás |
+| `invoice-processor-cicd-sa` | Deploy GitHub Actions-ből (WIF) |
+
+#### 3. Alkalmazás deploy – GitHub Actions
+
+```bash
+git push origin main
+```
+
+Ellenőrzés: GitHub → **Actions** fül.
+
+#### 4. GCP tesztelés
+
+A setup scriptek által kiírt URL-eket használd, vagy számítsd ki a konzol formátumát:
+
+```bash
+export GCP_PROJECT_ID=<a-gcp-projekt-id>
+export GCP_REGION=europe-west1
+PROJECT_NUMBER="$(gcloud projects describe "${GCP_PROJECT_ID}" --format='value(projectNumber)')"
+BACKEND_URL="https://invoice-processor-backend-${PROJECT_NUMBER}.${GCP_REGION}.run.app"
+FRONTEND_URL="https://invoice-processor-frontend-${PROJECT_NUMBER}.${GCP_REGION}.run.app"
+
+curl "${BACKEND_URL}/health"
+echo "Nyisd meg: ${FRONTEND_URL}"
+```
+
+> Az első deploy után a `/health` működik; a `setup.sh` placeholder image-jén még a Cloud Run „Congratulations” oldal jelenik meg.
+
+#### 5. Erőforrások törlése (demo újraindítás)
+
+```bash
+export GCP_PROJECT_ID=<a-gcp-projekt-id>
+export GITHUB_REPO=<szervezet>/<repo-nev>
+./scripts/teardown.sh
+./scripts/teardown-wif.sh
+```
+
+### Működik-e?
+
+| Réteg | Állapot | Megjegyzés |
+|-------|---------|------------|
+| Frontend build + lint | ✅ | Független a GCP-től |
+| Backend lint | ✅ | Független a GCP-től |
+| `/health` helyben | ✅ | GCP konfiguráció nélkül is |
+| Számla feldolgozás helyben | ⚠️ GCP kell | ADC + Document AI processzor + `roles/aiplatform.user` |
+| GCP deploy | ⚠️ CI-vel | `setup.sh` + `setup-wif.sh` + `git push main` |
+
+### Projekt struktúra
+
+```
+trn-gcp-ai-invoice-management/
+├── backend/           # FastAPI backend (main.py, dev.sh, pyproject.toml)
+│   ├── .env.example   # Backend környezeti változók sablonja
+│   ├── routers/       # upload, process, export
+│   ├── services/      # document_ai, gemini, processor, exporter
+│   └── models/        # Pydantic adatmodellek
+├── frontend/          # React + Vite UI
+│   └── .env.example   # Frontend (Vite) környezeti változók sablonja
+├── invoices/          # Fiktív demó számlák (PDF, JPG)
+├── scripts/           # setup.sh, setup-wif.sh, lib.sh, teardown.sh, teardown-wif.sh
+├── .github/workflows/ # lint.yml, deploy.yml
+```
+
+### Demo forgatókönyv
+
+A fiktív tesztszámlák az [`invoices/`](invoices/) mappában vannak. Részletes leírás: [`invoices/README.md`](invoices/README.md).
+
+| Fájl | Leírás | Elvárt eredmény |
+|------|--------|-----------------|
+| `szamla_ok_hu.pdf` | Szabályos magyar PDF számla | ✅ Minden mező kijön |
+| `szamla_kezzel_irt.jpg` | Kézzel írt, **adószám nélkül** | ❌ Gemini hibát jelez |
+| `szamla_ok_en.pdf` | Szabályos angol PDF számla | ✅ Angol mezők is mappelve |
+| `szamla_afa_hiba.pdf` | ÁFA / végösszeg számítás hibás | ⚠️ Gemini figyelmeztetést jelez |
+
+**Batch demo:** Töltsd fel mind a négy fájlt egyszerre → összesített táblázat → riport → export.
+
+---
+
+## Technológiai stack
+
+| Réteg | Technológia |
+|-------|-------------|
+| Frontend | React 18 + Vite + TailwindCSS |
+| Backend | Python 3.12 + FastAPI |
+| AI – Kinyerés | Google Cloud Document AI (Invoice Parser) |
+| AI – Validáció | Google Gemini API / Vertex AI (`gemini-3.1-flash-lite`, ADC) |
+| Deployment | Google Cloud Run (source deploy, Docker nélkül) |
+| CI/CD | GitHub Actions + Workload Identity Federation |
+| Titkok | Google Cloud Secret Manager |
+| Export | ReportLab (PDF), openpyxl (XLSX), csv |
