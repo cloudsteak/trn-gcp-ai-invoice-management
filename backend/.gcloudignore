@@ -1,0 +1,10 @@
+.env
+.env.*
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.uv/
+dev.sh
+requirements.txt

@@ -67,6 +67,7 @@ jobs:
           CICD_SA: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
           RUNTIME_SA_EMAIL: ${{ env.RUNTIME_SA }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
         run: |
+          CICD_SA_ID="${CICD_SA%%@*}"
           gcloud run deploy "${BACKEND_SERVICE}" \
             --source . \
             --region "${GCP_REGION}" \
@@ -74,11 +75,12 @@ jobs:
             --allow-unauthenticated \
             --quiet \
             --service-account "${RUNTIME_SA_EMAIL}" \
-            --build-service-account "projects/${PROJECT_ID}/serviceAccounts/${CICD_SA}" \
+            --build-service-account "projects/${PROJECT_ID}/serviceAccounts/${CICD_SA_ID}" \
             --memory=1Gi \
             --cpu=1 \
             --min-instances=0 \
             --max-instances=5 \
+            --set-build-env-vars="GOOGLE_PYTHON_PACKAGE_MANAGER=uv,GOOGLE_PYTHON_VERSION=3.12" \
             --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=${GCP_LOCATION:-eu},GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.1-flash-lite},GEMINI_LOCATION=${GEMINI_LOCATION:-global},MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-20},MAX_FILES_PER_BATCH=${MAX_FILES_PER_BATCH:-10},UPLOAD_DIR=${UPLOAD_DIR:-/tmp/invoices},CORS_ORIGINS=${CORS_ORIGINS:-*}" \
             --set-secrets="GCP_PROCESSOR_ID=invoice-gcp-processor-id:latest"
 
@@ -126,6 +128,7 @@ jobs:
           CICD_SA: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
           RUNTIME_SA_EMAIL: ${{ env.RUNTIME_SA }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
         run: |
+          CICD_SA_ID="${CICD_SA%%@*}"
           gcloud run deploy "${FRONTEND_SERVICE}" \
             --source . \
             --region "${GCP_REGION}" \
@@ -133,7 +136,7 @@ jobs:
             --allow-unauthenticated \
             --quiet \
             --service-account "${RUNTIME_SA_EMAIL}" \
-            --build-service-account "projects/${PROJECT_ID}/serviceAccounts/${CICD_SA}" \
+            --build-service-account "projects/${PROJECT_ID}/serviceAccounts/${CICD_SA_ID}" \
             --memory=512Mi \
             --cpu=1 \
             --min-instances=0 \
