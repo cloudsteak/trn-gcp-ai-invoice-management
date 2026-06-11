@@ -1,4 +1,4 @@
-// Export gombok sávja – PDF, XLSX, CSV és könyvelői adatlap letöltés
+// Export gombok sávja – PDF, XLSX, CSV letöltés
 import React, { useState } from 'react';
 import { downloadExport } from '../services/api.js';
 
@@ -56,15 +56,6 @@ function ExportBar({ results = [], jobId }) {
         className={`${buttonBase} bg-gray-100 text-gray-700 hover:bg-gray-200`}
       >
         {loading === 'csv' ? '⏳' : '📋'} CSV
-      </button>
-
-      {/* Könyvelői adatlap – vizuálisan elkülönített, ez a fő könyvelési export */}
-      <button
-        onClick={() => handleExport('xlsx-accounting')}
-        disabled={!canExport || !!loading}
-        className={`${buttonBase} bg-blue-600 text-white hover:bg-blue-700 ml-2 shadow-sm`}
-      >
-        {loading === 'xlsx-accounting' ? '⏳' : '🧾'} Könyvelői adatlap
       </button>
     </div>
   );
