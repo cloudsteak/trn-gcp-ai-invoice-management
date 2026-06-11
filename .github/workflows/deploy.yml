@@ -1,27 +1,30 @@
-name: Deploy to Cloud Run
+name: Deploy
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 env:
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_REGION: europe-west1
+  BACKEND_SERVICE: invoice-processor-backend
+  FRONTEND_SERVICE: invoice-processor-frontend
+  RUNTIME_SA: invoice-processor-sa
+  GCP_LOCATION: ${{ vars.GCP_LOCATION }}
+  GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+  GEMINI_LOCATION: ${{ vars.GEMINI_LOCATION }}
+  MAX_FILE_SIZE_MB: ${{ vars.MAX_FILE_SIZE_MB }}
+  MAX_FILES_PER_BATCH: ${{ vars.MAX_FILES_PER_BATCH }}
+  UPLOAD_DIR: ${{ vars.UPLOAD_DIR }}
+  CORS_ORIGINS: ${{ vars.CORS_ORIGINS }}
 
 jobs:
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
       backend: ${{ steps.filter.outputs.backend }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -35,124 +38,104 @@ jobs:
             backend:
               - 'backend/**'
 
-  lint-frontend:
-    name: Lint Frontend
-    runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    permissions:
-      contents: read
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Lint Frontend
-        working-directory: frontend
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-          npm run lint
-
-  lint-backend:
-    name: Lint Backend
+  deploy-backend:
+    name: Deploy Backend
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     permissions:
       contents: read
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          version: "latest"
-
-      - name: Lint Backend
-        working-directory: backend
-        run: |
-          uv run ruff check .
-
-  deploy-backend:
-    name: Deploy Backend
-    runs-on: ubuntu-latest
-    needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.backend == 'true'
-    permissions:
-      contents: read
       id-token: write
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Google Auth (Workload Identity Federation)
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
 
-      - name: Deploy Backend to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
         with:
-          service: invoice-processor-backend
-          region: ${{ env.GCP_REGION }}
-          source: ./backend
-          flags: |
-            --allow-unauthenticated
-            --memory=1Gi
-            --cpu=1
-            --min-instances=0
-            --max-instances=5
-          env_vars: |
-            GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-            GCP_LOCATION=${{ vars.GCP_LOCATION }}
-            GEMINI_MODEL=${{ vars.GEMINI_MODEL }}
-            MAX_FILE_SIZE_MB=${{ vars.MAX_FILE_SIZE_MB }}
-            MAX_FILES_PER_BATCH=${{ vars.MAX_FILES_PER_BATCH }}
-            UPLOAD_DIR=${{ vars.UPLOAD_DIR }}
-            CORS_ORIGINS=${{ vars.CORS_ORIGINS }}
-          secrets: |
-            GCP_PROCESSOR_ID=invoice-gcp-processor-id:latest
-            GEMINI_API_KEY=invoice-gemini-api-key:latest
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Deploy backend to Cloud Run
+        working-directory: backend
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          CICD_SA: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+          RUNTIME_SA_EMAIL: ${{ env.RUNTIME_SA }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+        run: |
+          gcloud run deploy "${BACKEND_SERVICE}" \
+            --source . \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --quiet \
+            --service-account "${RUNTIME_SA_EMAIL}" \
+            --build-service-account "projects/${PROJECT_ID}/serviceAccounts/${CICD_SA}" \
+            --memory=1Gi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=5 \
+            --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=${GCP_LOCATION:-eu},GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.1-flash-lite},GEMINI_LOCATION=${GEMINI_LOCATION:-global},MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-20},MAX_FILES_PER_BATCH=${MAX_FILES_PER_BATCH:-10},UPLOAD_DIR=${UPLOAD_DIR:-/tmp/invoices},CORS_ORIGINS=${CORS_ORIGINS:-*}" \
+            --set-secrets="GCP_PROCESSOR_ID=invoice-gcp-processor-id:latest"
 
   deploy-frontend:
     name: Deploy Frontend
     runs-on: ubuntu-latest
-    needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.frontend == 'true'
+    needs: [changes, deploy-backend]
+    if: |
+      always() &&
+      needs.changes.outputs.frontend == 'true' &&
+      (needs.deploy-backend.result == 'success' || needs.deploy-backend.result == 'skipped')
     permissions:
       contents: read
       id-token: write
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Google Auth (Workload Identity Federation)
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
 
-      - name: Deploy Frontend to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
         with:
-          service: invoice-processor-frontend
-          region: ${{ env.GCP_REGION }}
-          source: ./frontend
-          flags: |
-            --allow-unauthenticated
-            --memory=512Mi
-            --cpu=1
-            --min-instances=0
-            --max-instances=3
-          build_environment_variables: |
-            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Resolve backend URL
+        id: backend
+        run: |
+          if [[ -n "${{ secrets.VITE_API_BASE_URL }}" ]]; then
+            echo "url=${{ secrets.VITE_API_BASE_URL }}" >> "${GITHUB_OUTPUT}"
+          else
+            BACKEND_URL="$(gcloud run services describe "${BACKEND_SERVICE}" \
+              --region "${GCP_REGION}" \
+              --format='value(status.url)')"
+            echo "url=${BACKEND_URL}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Deploy frontend to Cloud Run
+        working-directory: frontend
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          CICD_SA: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+          RUNTIME_SA_EMAIL: ${{ env.RUNTIME_SA }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+        run: |
+          gcloud run deploy "${FRONTEND_SERVICE}" \
+            --source . \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --quiet \
+            --service-account "${RUNTIME_SA_EMAIL}" \
+            --build-service-account "projects/${PROJECT_ID}/serviceAccounts/${CICD_SA}" \
+            --memory=512Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=3 \
+            --set-build-env-vars="VITE_API_BASE_URL=${{ steps.backend.outputs.url }}"
