@@ -1,7 +1,6 @@
 # Orchestrátor – Document AI és Gemini szolgáltatások összefűzése
 import time
 from datetime import date, datetime
-from pathlib import Path
 
 from pydantic import ValidationError
 
