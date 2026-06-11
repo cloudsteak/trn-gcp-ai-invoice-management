@@ -6,7 +6,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 
 from config import settings
-from utils.file_handler import validate_file, save_file
+from utils.file_handler import validate_file, save_file, cleanup_upload_dir
 from utils.logger import get_logger
 
 router = APIRouter()
@@ -23,6 +23,16 @@ class UploadedFile(BaseModel):
 class UploadResponse(BaseModel):
     """Feltöltési válasz – az összes fájl azonosítójával"""
     files: List[UploadedFile]
+
+
+class DeleteFilesRequest(BaseModel):
+    """Feltöltött fájlok törlésének kérése"""
+    file_ids: List[str]
+
+
+class DeleteFilesResponse(BaseModel):
+    """Törlés válasz – törölt fájlok száma"""
+    deleted: int
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -56,3 +66,19 @@ async def upload_files(files: List[UploadFile] = File(...)):
         ))
 
     return UploadResponse(files=uploaded)
+
+
+@router.post("/upload/delete", response_model=DeleteFilesResponse)
+async def delete_uploaded_files(request: DeleteFilesRequest):
+    """
+    Feltöltött fájlok törlése a szerverről (feldolgozás előtt).
+    A frontend „Összes törlése” gombja ezt hívja.
+    """
+    if not request.file_ids:
+        raise HTTPException(status_code=400, detail="Legalább egy fájl azonosítót meg kell adni.")
+
+    for file_id in request.file_ids:
+        cleanup_upload_dir(settings.upload_dir, file_id)
+        logger.info(f"Feltöltött fájl törölve: {file_id}")
+
+    return DeleteFilesResponse(deleted=len(request.file_ids))

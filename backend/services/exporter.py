@@ -1,22 +1,95 @@
 # Export szolgáltatások – PDF, XLSX, CSV és könyvelői adatlap generálása
 import csv
 import io
+import os
 from datetime import date
 from typing import List
 
+import openpyxl
+import reportlab
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.utils import get_column_letter
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from models.result import InvoiceResult, InvoiceStatus
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# ReportLab Vera betűk – teljes magyar ékezetes abc (ő, ű), a Helvetica nem
+_PDF_FONTS_REGISTERED = False
+
+
+def _register_pdf_fonts() -> None:
+    """Unicode-kompatibilis TTF betűk regisztrálása (ReportLab csomagban)."""
+    global _PDF_FONTS_REGISTERED
+    if _PDF_FONTS_REGISTERED:
+        return
+
+    fonts_dir = os.path.join(os.path.dirname(reportlab.__file__), "fonts")
+    pdfmetrics.registerFont(TTFont("Vera", os.path.join(fonts_dir, "Vera.ttf")))
+    pdfmetrics.registerFont(TTFont("VeraBd", os.path.join(fonts_dir, "VeraBd.ttf")))
+    pdfmetrics.registerFontFamily(
+        "Vera",
+        normal="Vera",
+        bold="VeraBd",
+        italic="Vera",
+        boldItalic="VeraBd",
+    )
+    _PDF_FONTS_REGISTERED = True
+
+
+def _pdf_styles():
+    """PDF stíluslap magyar karaktereket támogató betűkkel."""
+    _register_pdf_fonts()
+    base = getSampleStyleSheet()
+    return {
+        "title": ParagraphStyle(
+            "PdfTitle",
+            parent=base["Title"],
+            fontName="VeraBd",
+        ),
+        "normal": ParagraphStyle(
+            "PdfNormal",
+            parent=base["Normal"],
+            fontName="Vera",
+        ),
+        "heading2": ParagraphStyle(
+            "PdfHeading2",
+            parent=base["Heading2"],
+            fontName="VeraBd",
+        ),
+        "heading3": ParagraphStyle(
+            "PdfHeading3",
+            parent=base["Heading3"],
+            fontName="VeraBd",
+        ),
+    }
+
+
+def _pdf_table_style(header: bool = True) -> TableStyle:
+    """Táblázat stílus Vera betűvel – ékezetes szövegekhez."""
+    commands = [
+        ("FONTNAME", (0, 0), (-1, -1), "Vera"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]
+    if header:
+        commands.extend([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+            ("FONTNAME", (0, 0), (-1, 0), "VeraBd"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+        ])
+    return TableStyle(commands)
+
 
 # Státusz szövegek magyarítása
 STATUS_LABELS = {
@@ -25,11 +98,11 @@ STATUS_LABELS = {
     InvoiceStatus.ERROR: "Hiba",
 }
 
-# Státusz ikonok PDF-hez
-STATUS_ICONS = {
-    InvoiceStatus.OK: "✅",
-    InvoiceStatus.WARNING: "⚠️",
-    InvoiceStatus.ERROR: "❌",
+# Státusz szövegek PDF-hez (emoji helyett – a Vera TTF nem tartalmaz pictogramokat)
+STATUS_PDF_LABELS = {
+    InvoiceStatus.OK: "Rendben",
+    InvoiceStatus.WARNING: "Figyelmeztetés",
+    InvoiceStatus.ERROR: "Hiba",
 }
 
 # Cellaszínek XLSX-hez (RGB hex)
@@ -77,12 +150,12 @@ def generate_pdf(results: List[InvoiceResult]) -> bytes:
         bottomMargin=2 * cm,
     )
 
-    styles = getSampleStyleSheet()
+    styles = _pdf_styles()
     elements = []
 
     # Fejléc
-    elements.append(Paragraph("Intelligens Számlafeldolgozó – Riport", styles["Title"]))
-    elements.append(Paragraph(f"Generálva: {date.today().strftime('%Y-%m-%d')}", styles["Normal"]))
+    elements.append(Paragraph("Intelligens Számlafeldolgozó – Riport", styles["title"]))
+    elements.append(Paragraph(f"Generálva: {date.today().strftime('%Y-%m-%d')}", styles["normal"]))
     elements.append(Spacer(1, 0.5 * cm))
 
     # Összesítő táblázat fejléce
@@ -95,27 +168,19 @@ def generate_pdf(results: List[InvoiceResult]) -> bytes:
             (inv.supplier_name or "") if inv else "",
             _format_amount(inv.gross_amount if inv else None),
             (inv.currency or "") if inv else "",
-            f"{STATUS_ICONS.get(result.status, '')} {STATUS_LABELS.get(result.status, '')}",
+            f"{STATUS_PDF_LABELS.get(result.status, '')}",
         ]
         table_data.append(row)
 
     # Táblázat stílus
     table = Table(table_data, repeatRows=1)
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-    ]))
+    table.setStyle(_pdf_table_style())
     elements.append(table)
     elements.append(Spacer(1, 1 * cm))
 
     # Részletes szekciók számlánként
     for result in results:
-        elements.append(Paragraph(f"Számla: {result.file_name}", styles["Heading2"]))
+        elements.append(Paragraph(f"Számla: {result.file_name}", styles["heading2"]))
 
         if result.invoice_data:
             inv = result.invoice_data
@@ -132,6 +197,7 @@ def generate_pdf(results: List[InvoiceResult]) -> bytes:
             ]
             detail_table = Table(details, colWidths=[5 * cm, 10 * cm])
             detail_table.setStyle(TableStyle([
+                ("FONTNAME", (0, 0), (-1, -1), "Vera"),
                 ("FONTSIZE", (0, 0), (-1, -1), 8),
                 ("GRID", (0, 0), (-1, -1), 0.3, colors.lightgrey),
             ]))
@@ -139,18 +205,17 @@ def generate_pdf(results: List[InvoiceResult]) -> bytes:
 
         # Validációs hibák listázása
         if result.issues:
-            elements.append(Paragraph("Validációs megjegyzések:", styles["Heading3"]))
+            elements.append(Paragraph("Validációs megjegyzések:", styles["heading3"]))
             for issue in result.issues:
-                icon = STATUS_ICONS.get(issue.severity, "")
                 elements.append(Paragraph(
-                    f"{icon} {issue.message}",
-                    styles["Normal"]
+                    issue.message,
+                    styles["normal"],
                 ))
 
         # Gemini könyvelői összefoglaló
         if result.gemini_summary:
-            elements.append(Paragraph("Könyvelői értékelés:", styles["Heading3"]))
-            elements.append(Paragraph(result.gemini_summary, styles["Normal"]))
+            elements.append(Paragraph("Könyvelői értékelés:", styles["heading3"]))
+            elements.append(Paragraph(result.gemini_summary, styles["normal"]))
 
         elements.append(Spacer(1, 0.5 * cm))
 
