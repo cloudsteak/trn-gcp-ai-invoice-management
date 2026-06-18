@@ -68,6 +68,8 @@ gh auth login
 ./scripts/setup-github.sh
 ```
 
+A script kilistázza a beállítandó secrets/variables értékeket, majd kérdez: `Folytatod a beallitast? [y/N]` → nyomj **`y`**, Enter.
+
 ### 8. Alkalmazás deploy
 
 1. GitHub repó → **Pull requests** → **New pull request** → **Create pull request**
@@ -366,6 +368,8 @@ export GITHUB_REPO=<szervezet>/<repo-nev>   # opcionális, ha a repo gyökeréb�
 | `GITHUB_REPO` | Automatikusan felismeri, ha a klónból fut |
 
 A script a GCP-ből számolja ki a WIF provider és CI/CD SA értékeket; a backend URL-t a Cloud Run service alapján. A variables alapértelmezései megegyeznek a `deploy.yml`-ével – felülírhatók környezeti változókkal (pl. `GEMINI_MODEL=...`).
+
+A végén megjelenik a beállítandó variables listája és a kérdés: `Folytatod a beallitast? [y/N]` → nyomj **`y`**, Enter. (Automatikus folytatás: `./scripts/setup-github.sh --yes`.)
 
 Manuális beállítás is lehetséges (Settings → Secrets and variables → Actions). A demo végén a [`teardown-github.sh`](#6-erőforrások-törlése-demo-újraindítás) törli ezeket.
 
