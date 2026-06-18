@@ -178,4 +178,5 @@ fi
 
 echo ""
 echo "GitHub setup kesz: ${GITHUB_REPO}"
-echo "Kovetkezo lepes: git push origin main"
+echo "Kovetkezo lepes: GitHub repoban PR nyitasa es merge a main branchre"
+echo "  Pull requests -> New pull request -> Merge -> Actions -> Deploy"

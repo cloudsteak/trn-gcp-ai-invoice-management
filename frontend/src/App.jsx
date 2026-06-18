@@ -10,6 +10,7 @@ import { useProcessing } from './hooks/useProcessing.js';
 import { useUpload } from './hooks/useUpload.js';
 import { deleteUploadedFiles } from './services/api.js';
 
+
 function App() {
   const { uploadedFiles, addFiles, removeFile, clearFiles } = useUpload();
   const [clearing, setClearing] = useState(false);
