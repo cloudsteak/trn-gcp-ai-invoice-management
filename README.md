@@ -72,6 +72,13 @@ A script kilistázza a beállítandó secrets/variables értékeket, majd kérde
 
 ### 8. Alkalmazás deploy
 
+Ha a forráskódban nincs módosítás, adj hozzá egy-egy üres sort ehhez:
+
+- `backend/main.py`
+- `frontend/src/App.jsx`
+
+(Ez kell ahhoz, hogy a GitHub Actions ténylegesen deployoljon.)
+
 1. GitHub repó → **Pull requests** → **New pull request** → **Create pull request**
 2. **Merge** a PR-t a `main` branchre
 
@@ -395,6 +402,13 @@ Manuális beállítás is lehetséges (Settings → Secrets and variables → Ac
 | `CORS_ORIGINS` | `*` |
 
 #### 4. Alkalmazás deploy – GitHub Actions
+
+Ha a forráskódban nincs módosítás, adj hozzá egy-egy üres sort ehhez:
+
+- `backend/main.py`
+- `frontend/src/App.jsx`
+
+(Ez kell ahhoz, hogy a GitHub Actions ténylegesen deployoljon.)
 
 1. GitHub repó → **Pull requests** → **New pull request** → **Create pull request**
 2. **Merge** a PR-t a `main` branchre
