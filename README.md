@@ -62,22 +62,15 @@ gh auth login
 
 ### 7. Alkalmazás deploy
 
-```bash
-git push origin main
-```
+1. GitHub repó → **Pull requests** → **New pull request** → **Create pull request**
+2. **Merge** a PR-t a `main` branchre
 
-Ellenőrzés: GitHub → **Actions** fül.
+A GitHub Actions automatikusan deployol – pár perc múlva él az alkalmazás. Követés: **Actions** → **Deploy**.
 
 ### 8. Tesztelés
 
-```bash
-PROJECT_NUMBER="$(gcloud projects describe "${GCP_PROJECT_ID}" --format='value(projectNumber)')"
-BACKEND_URL="https://invoice-processor-backend-${PROJECT_NUMBER}.${GCP_REGION}.run.app"
-FRONTEND_URL="https://invoice-processor-frontend-${PROJECT_NUMBER}.${GCP_REGION}.run.app"
-
-curl "${BACKEND_URL}/health"
-echo "Nyisd meg: ${FRONTEND_URL}"
-```
+1. Nyisd meg a frontend weboldalt a böngészőben. Az URL-t a `setup.sh` a végén kiírja, vagy a GCP Console → **Cloud Run** → `invoice-processor-frontend` → **URL**.
+2. Tölts fel egy tesztszámlát az [`invoices/`](invoices/) mappából (pl. `01_helyes_alap.pdf`), indítsd el a feldolgozást, és nézd meg az eredményt.
 
 ### 9. Erőforrások törlése (demo újraindítás)
 
@@ -195,7 +188,7 @@ flowchart LR
     subgraph GCP["☁️ GCP production – egyszeri + automatikus"]
         S1["1. setup.sh<br/>infrastruktúra"] --> S2["2. setup-wif.sh<br/>GitHub WIF"]
         S2 --> S3["3. setup-github.sh<br/>GitHub secrets"]
-        S3 --> S4["4. push → main"]
+        S3 --> S4["4. PR merge → main"]
         S4 --> S5["deploy.yml"]
     end
 
@@ -209,7 +202,7 @@ flowchart LR
 | Infrastruktúra (API-k, SA, Secrets, üres Cloud Run) | `scripts/setup.sh` | GCP erőforrások – **nem** az alkalmazás kódját | Egyszer, projekt elején |
 | GitHub Actions WIF | `scripts/setup-wif.sh` | Kulcs nélküli CI hitelesítés | Egyszer, `setup.sh` után |
 | GitHub Secrets + Variables | `scripts/setup-github.sh` | Repository secrets/variables (`gh` CLI) | Egyszer, `setup-wif.sh` után |
-| Alkalmazás kód | **GitHub Actions** `deploy.yml` | Forráskód → Cloud Run | Minden `main` push |
+| Alkalmazás kód | **GitHub Actions** `deploy.yml` | Forráskód → Cloud Run | `main`-re merge után |
 | Lint ellenőrzés | GitHub Actions `lint.yml` | Kódminőség PR-en | Minden pull request |
 | Demo törlése (GCP) | `scripts/teardown.sh` → `teardown-wif.sh` | Cloud Run, Secret Manager, SA, WIF | Demo újraindításkor |
 | Demo törlése (GitHub) | `scripts/teardown-github.sh` | Repository secrets + variables | `teardown-wif.sh` után |
@@ -288,7 +281,7 @@ cd frontend && npm install && npm run lint && npm run build
 1. setup.sh          →  GCP infrastruktúra (egyszer)
 2. setup-wif.sh      →  GitHub Actions WIF (egyszer, JSON kulcs nélkül)
 3. setup-github.sh   →  GitHub Secrets + Variables (gh CLI)
-4. git push main     →  alkalmazás deploy (automatikus, deploy.yml)
+4. PR merge → main  →  alkalmazás deploy (automatikus, pár perc)
 5. tesztelés         →  Cloud Run URL-eken
 ```
 
@@ -381,28 +374,17 @@ Manuális beállítás is lehetséges (Settings → Secrets and variables → Ac
 
 #### 4. Alkalmazás deploy – GitHub Actions
 
-```bash
-git push origin main
-```
+1. GitHub repó → **Pull requests** → **New pull request** → **Create pull request**
+2. **Merge** a PR-t a `main` branchre
 
-Ellenőrzés: GitHub → **Actions** fül.
+A GitHub Actions automatikusan deployol (pár perc). Követés: **Actions** → **Deploy**.
 
 #### 5. GCP tesztelés
 
-A setup scriptek által kiírt URL-eket használd, vagy számítsd ki a konzol formátumát:
+1. Nyisd meg a frontend weboldalt a böngészőben. Az URL: GCP Console → **Cloud Run** → `invoice-processor-frontend` → **URL** (a `setup.sh` is kiírja a végén).
+2. Tölts fel egy tesztszámlát az [`invoices/`](invoices/) mappából, indítsd el a feldolgozást, és nézd meg az eredményt. Melyik fájl mire való: [`invoices/README.md`](invoices/README.md).
 
-```bash
-export GCP_PROJECT_ID=<a-gcp-projekt-id>
-export GCP_REGION=europe-west1
-PROJECT_NUMBER="$(gcloud projects describe "${GCP_PROJECT_ID}" --format='value(projectNumber)')"
-BACKEND_URL="https://invoice-processor-backend-${PROJECT_NUMBER}.${GCP_REGION}.run.app"
-FRONTEND_URL="https://invoice-processor-frontend-${PROJECT_NUMBER}.${GCP_REGION}.run.app"
-
-curl "${BACKEND_URL}/health"
-echo "Nyisd meg: ${FRONTEND_URL}"
-```
-
-> Az első deploy után a `/health` működik; a `setup.sh` placeholder image-jén még a Cloud Run „Congratulations” oldal jelenik meg.
+> Az első deploy után a valódi alkalmazás jelenik meg; a `setup.sh` placeholder image-jén még a Cloud Run „Congratulations” oldal látszik.
 
 #### 6. Erőforrások törlése (demo újraindítás)
 
@@ -467,7 +449,7 @@ A script **csak a létező** értékeket törli (idempotens). A `--yes` kapcsol�
 | `UPLOAD_DIR` | `/tmp/invoices` |
 | `CORS_ORIGINS` | `*` |
 
-> **Megjegyzés:** A teljes demo újraindításhoz a fenti három script sorrendben futtatandó, majd újra `setup.sh` → `setup-wif.sh` → `setup-github.sh` → `git push main`.
+> **Megjegyzés:** A teljes demo újraindításhoz a fenti három script sorrendben futtatandó, majd újra `setup.sh` → `setup-wif.sh` → `setup-github.sh` → PR merge `main`-re.
 
 ### Működik-e?
 
@@ -477,7 +459,7 @@ A script **csak a létező** értékeket törli (idempotens). A `--yes` kapcsol�
 | Backend lint | ✅ | Független a GCP-től |
 | `/health` helyben | ✅ | GCP konfiguráció nélkül is |
 | Számla feldolgozás helyben | ⚠️ GCP kell | ADC + Document AI processzor + `roles/aiplatform.user` |
-| GCP deploy | ⚠️ CI-vel | `setup.sh` + `setup-wif.sh` + `setup-github.sh` + `git push main` |
+| GCP deploy | ⚠️ CI-vel | `setup.sh` + `setup-wif.sh` + `setup-github.sh` + PR merge `main`-re |
 
 ### Projekt struktúra
 
