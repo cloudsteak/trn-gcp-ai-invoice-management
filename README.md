@@ -43,7 +43,8 @@ gcloud auth application-default login
 ### 4. Aktuális projekt beállítása
 
 ```bash
-gcloud config set project <a-gcp-projekt-id>
+gcloud config set project "${GCP_PROJECT_ID}"
+gcloud auth application-default set-quota-project "${GCP_PROJECT_ID}"
 ```
 
 ### 5. Infrastruktúra telepítése
@@ -237,8 +238,10 @@ CORS_ORIGINS=http://localhost:3000
 ```
 
 ```bash
+set -a; source .env; set +a
 gcloud auth application-default login
-gcloud config set project <a-gcp-projekt-id>
+gcloud config set project "${GCP_PROJECT_ID}"
+gcloud auth application-default set-quota-project "${GCP_PROJECT_ID}"
 uv sync
 ./dev.sh
 ```
