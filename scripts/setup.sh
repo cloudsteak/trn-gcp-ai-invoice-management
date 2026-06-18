@@ -52,16 +52,14 @@ fi
 
 create_secret() {
   local name="$1"
-  local prompt="$2"
-  local value
+  local env_var="$2"
+  local value="${!env_var:-}"
 
   if gcloud secrets describe "${name}" >/dev/null 2>&1; then
     echo "Secret mar letezik, kihagyva: ${name}"
   else
-    echo -n "${prompt}: "
-    read -r value
     if [[ -z "${value}" ]]; then
-      echo "Hiba: a ${name} secret erteke nem lehet ures."
+      echo "Hiba: allitsd be a ${env_var} kornyezeti valtozot."
       exit 1
     fi
     echo -n "${value}" | gcloud secrets create "${name}" \
@@ -73,7 +71,7 @@ create_secret() {
 }
 
 echo "Cloud Secret Manager – titkok beallitasa..."
-create_secret "invoice-gcp-processor-id" "Document AI Processor ID"
+create_secret "invoice-gcp-processor-id" "GCP_PROCESSOR_ID"
 
 echo "Cloud Run backend service letrehozasa placeholder image-dzsel..."
 if gcloud run services describe "${BACKEND_SERVICE}" --region="${REGION}" >/dev/null 2>&1; then
