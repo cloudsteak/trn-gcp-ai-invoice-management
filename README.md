@@ -67,15 +67,13 @@ A [Google AI Studio](https://aistudio.google.com) felületen kipróbálható a G
 ### Előfeltételek
 
 - Google-fiók AI Studio hozzáféréssel
-- Document AI-ból kinyert adatok (JSON) vagy a számla szövege
 
 ### Lépések
 
 1. Nyisd meg: [https://aistudio.google.com](https://aistudio.google.com)
 2. Válassz modellt: `gemini-3.1-flash-lite`
 3. Illeszd be az alábbi system promptot
-4. Add meg a Document AI JSON kimenetét és/vagy a számla szövegét
-5. Ellenőrizd a JSON választ: `filled_fields`, `issues`, `summary`
+4. Ellenőrizd a választ
 
 ### Validációs prompt (rövidített)
 
@@ -84,7 +82,6 @@ Te egy tapasztalt magyar könyvelő és pénzügyi ellenőr vagy.
 Egészítsd ki a hiányzó mezőket, ellenőrizd az ÁFA számítást,
 keresd az anomáliákat. Ha az eladó adószáma hiányzik, az HIBA.
 Írj 3-5 mondatos könyvelői értékelést magyarul.
-Válaszolj kizárólag JSON formátumban.
 ```
 
 A teljes prompt a [`backend/services/gemini.py`](backend/services/gemini.py) fájlban van implementálva.
@@ -93,7 +90,6 @@ A teljes prompt a [`backend/services/gemini.py`](backend/services/gemini.py) fá
 
 - **Prompt iteráció** – validációs szabályok finomhangolása
 - **Prototípus** – a felhő alkalmazás Gemini logikája innen származtatható
-- **Önálló ellenőrzés** – Document AI eredmény manuális validálása
 
 ### Korlátok
 
