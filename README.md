@@ -14,65 +14,72 @@ PDF és képfájl alapú számlák automatikus feldolgozása a **Google Cloud Do
 
 Gyors útmutató a GCP-re való telepítéshez. Részletek alább a [Skálázható felhő alapú megoldás](#skálázható-felhő-alapú-megoldás) szekcióban.
 
-**Előfeltételek:** `gcloud` CLI, `gh` CLI, GCP projekt számlázással, Document AI Invoice Parser processzor (`eu` régió).
+**Előfeltételek:** `gcloud` CLI, `gh` CLI, GCP projekt számlázással.
 
-### 1. Bejelentkezés GCP-be
+### 1. Document AI processzor létrehozása
 
-```bash
-gcloud auth login
-gcloud auth application-default login
-```
+[GCP Console → Document AI](https://console.cloud.google.com/ai/document-ai) → **Create Processor** → **Invoice Parser** → régió: **`eu`**
 
-### 2. Aktuális projekt beállítása
+Másold ki a **Processor ID**-t – a következő lépésben kell.
 
-```bash
-gcloud config set project <a-gcp-projekt-id>
-```
-
-### 3. Környezeti változók beállítása
+### 2. Környezeti változók beállítása
 
 ```bash
 export GCP_PROJECT_ID=<a-gcp-projekt-id>
+export GCP_PROCESSOR_ID=<a-processzor-id>
 export GCP_REGION=europe-west1
 export BACKEND_SERVICE=invoice-processor-backend
 export FRONTEND_SERVICE=invoice-processor-frontend
 export GITHUB_REPO=<szervezet>/<repo-nev>
 ```
 
-### 4. Infrastruktúra telepítése
+### 3. Bejelentkezés GCP-be
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+```
+
+### 4. Aktuális projekt beállítása
+
+```bash
+gcloud config set project <a-gcp-projekt-id>
+```
+
+### 5. Infrastruktúra telepítése
 
 ```bash
 ./scripts/setup.sh
 ```
 
-A script bekéri a **Document AI Processor ID**-t. Ha még nincs processzor: [GCP Console → Document AI](https://console.cloud.google.com/ai/document-ai) → **Create Processor** → **Invoice Parser** → régió: `eu`.
+A script a `GCP_PROCESSOR_ID` környezeti változót Secret Manager-be menti, majd kiírja a Cloud Run URL-eket.
 
-### 5. GitHub Actions hitelesítés (WIF)
+### 6. GitHub Actions hitelesítés (WIF)
 
 ```bash
 ./scripts/setup-wif.sh
 ```
 
-### 6. GitHub Secrets és Variables
+### 7. GitHub Secrets és Variables
 
 ```bash
 gh auth login
 ./scripts/setup-github.sh
 ```
 
-### 7. Alkalmazás deploy
+### 8. Alkalmazás deploy
 
 1. GitHub repó → **Pull requests** → **New pull request** → **Create pull request**
 2. **Merge** a PR-t a `main` branchre
 
 A GitHub Actions automatikusan deployol – pár perc múlva él az alkalmazás. Követés: **Actions** → **Deploy**.
 
-### 8. Tesztelés
+### 9. Tesztelés
 
 1. Nyisd meg a frontend weboldalt a böngészőben. Az URL-t a `setup.sh` a végén kiírja, vagy a GCP Console → **Cloud Run** → `invoice-processor-frontend` → **URL**.
 2. Tölts fel egy tesztszámlát az [`invoices/`](invoices/) mappából (pl. `01_helyes_alap.pdf`), indítsd el a feldolgozást, és nézd meg az eredményt.
 
-### 9. Erőforrások törlése (demo újraindítás)
+### 10. Erőforrások törlése (demo újraindítás)
 
 ```bash
 ./scripts/teardown.sh
@@ -278,21 +285,32 @@ cd frontend && npm install && npm run lint && npm run build
 #### Telepítési sorrend (ajánlott)
 
 ```
-1. setup.sh          →  GCP infrastruktúra (egyszer)
-2. setup-wif.sh      →  GitHub Actions WIF (egyszer, JSON kulcs nélkül)
-3. setup-github.sh   →  GitHub Secrets + Variables (gh CLI)
-4. PR merge → main  →  alkalmazás deploy (automatikus, pár perc)
-5. tesztelés         →  Cloud Run URL-eken
+0. Document AI processzor  →  Console: Invoice Parser (eu)
+1. setup.sh                →  GCP infrastruktúra (GCP_PROCESSOR_ID környezeti változóból)
+2. setup-wif.sh            →  GitHub Actions WIF (egyszer, JSON kulcs nélkül)
+3. setup-github.sh         →  GitHub Secrets + Variables (gh CLI)
+4. PR merge → main         →  alkalmazás deploy (automatikus, pár perc)
+5. tesztelés               →  weboldal + invoices/ feltöltés
+```
+
+#### 0. Document AI processzor
+
+1. [GCP Console → Document AI](https://console.cloud.google.com/ai/document-ai) → **Create Processor** → **Invoice Parser** → régió: **`eu`**
+2. Másold ki a **Processor ID**-t:
+
+```bash
+export GCP_PROCESSOR_ID=<a-processzor-id>
 ```
 
 #### 1. Infrastruktúra – `setup.sh`
 
 ```bash
 export GCP_PROJECT_ID=<a-gcp-projekt-id>
+export GCP_PROCESSOR_ID=<a-processzor-id>
 ./scripts/setup.sh
 ```
 
-A script bekéri a **Document AI Processor ID**-t, majd Secret Manager-be menti. A végén kiírja a **Cloud Run URL-eket** (GCP konzollal egyező formátum) és copy-paste-elhető `export` parancsokat:
+A script a `GCP_PROCESSOR_ID` környezeti változót Secret Manager-be menti. A végén kiírja a **Cloud Run URL-eket** (GCP konzollal egyező formátum) és copy-paste-elhető `export` parancsokat:
 
 ```text
 export GCP_PROJECT_ID=...
@@ -302,9 +320,6 @@ export FRONTEND_SERVICE=invoice-processor-frontend
 ```
 
 > **Gemini:** nincs külön API kulcs – a runtime service account (`invoice-processor-sa`) hívja a Vertex AI-t ADC-vel.
-
-Document AI processzor (ha még nincs):
-1. [GCP Console → Document AI](https://console.cloud.google.com/ai/document-ai) → **Create Processor** → **Invoice Parser** → régió: `eu`
 
 #### 2. GitHub Actions hitelesítés – WIF
 
