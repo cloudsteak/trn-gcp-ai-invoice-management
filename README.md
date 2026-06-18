@@ -36,8 +36,8 @@ export GITHUB_REPO=<szervezet>/<repo-nev>
 ### 3. Bejelentkezés GCP-be
 
 ```bash
-gcloud auth login
-gcloud auth application-default login
+gcloud auth login                              # gcloud CLI parancsokhoz (setup.sh, setup-wif.sh)
+gcloud auth application-default login          # helyi backend futtatáshoz (ADC, pl. ./dev.sh)
 ```
 
 ### 4. Aktuális projekt beállítása
