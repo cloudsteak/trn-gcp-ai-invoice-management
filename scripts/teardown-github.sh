@@ -34,10 +34,12 @@ Hasznalat:
   ./scripts/teardown-github.sh [--yes]
 
 Torli a setup-wif.sh altal beallitott GitHub Actions secrets es variables ertekeket.
+Emellett torli a repository-hoz tartozo GitHub Actions workflow run history bejegyzeseket is.
 
 Elofeltetelek:
   - gh CLI telepitve es bejelentkezve (gh auth login)
   - repo admin jogosultsag a secrets/variables torleshez
+  - Actions write jogosultsag workflow run history torleshez
 
 Kornyezeti valtozok:
   GITHUB_REPO   Cel repository (pl. cloudsteak/trn-gcp-ai-invoice-management)
@@ -92,10 +94,16 @@ while IFS= read -r line; do
   [[ -n "${line}" ]] && EXISTING_VARIABLES+=("${line}")
 done < <(gh variable list --repo "${GITHUB_REPO}" --json name -q '.[].name' 2>/dev/null || true)
 
+WORKFLOW_RUN_IDS_TO_DELETE=()
+while IFS= read -r line; do
+  [[ -n "${line}" ]] && WORKFLOW_RUN_IDS_TO_DELETE+=("${line}")
+done < <(gh api --paginate "repos/${GITHUB_REPO}/actions/runs?per_page=100" --jq '.workflow_runs[].id' 2>/dev/null || true)
+
 secret_exists() {
   local name="$1"
   local item
-  for item in "${EXISTING_SECRETS[@]}"; do
+  for item in "${EXISTING_SECRETS[@]-}"; do
+    [[ -z "${item}" ]] && continue
     [[ "${item}" == "${name}" ]] && return 0
   done
   return 1
@@ -104,7 +112,8 @@ secret_exists() {
 variable_exists() {
   local name="$1"
   local item
-  for item in "${EXISTING_VARIABLES[@]}"; do
+  for item in "${EXISTING_VARIABLES[@]-}"; do
+    [[ -z "${item}" ]] && continue
     [[ "${item}" == "${name}" ]] && return 0
   done
   return 1
@@ -113,20 +122,20 @@ variable_exists() {
 SECRETS_TO_DELETE=()
 VARIABLES_TO_DELETE=()
 
-for name in "${GITHUB_SECRETS[@]}"; do
+for name in "${GITHUB_SECRETS[@]-}"; do
   if secret_exists "${name}"; then
     SECRETS_TO_DELETE+=("${name}")
   fi
 done
 
-for name in "${GITHUB_VARIABLES[@]}"; do
+for name in "${GITHUB_VARIABLES[@]-}"; do
   if variable_exists "${name}"; then
     VARIABLES_TO_DELETE+=("${name}")
   fi
 done
 
-if [[ ${#SECRETS_TO_DELETE[@]} -eq 0 && ${#VARIABLES_TO_DELETE[@]} -eq 0 ]]; then
-  echo "Nincs torlendo GitHub secret vagy variable a ${GITHUB_REPO} repoban."
+if [[ ${#SECRETS_TO_DELETE[@]} -eq 0 && ${#VARIABLES_TO_DELETE[@]} -eq 0 && ${#WORKFLOW_RUN_IDS_TO_DELETE[@]} -eq 0 ]]; then
+  echo "Nincs torlendo GitHub secret, variable vagy workflow run history a ${GITHUB_REPO} repoban."
   exit 0
 fi
 
@@ -146,6 +155,13 @@ else
   echo "  (nincs)"
 fi
 echo ""
+echo "Torlendo workflow run history elemek (${#WORKFLOW_RUN_IDS_TO_DELETE[@]}):"
+if [[ ${#WORKFLOW_RUN_IDS_TO_DELETE[@]} -gt 0 ]]; then
+  echo "  - ${#WORKFLOW_RUN_IDS_TO_DELETE[@]} db workflow run"
+else
+  echo "  (nincs)"
+fi
+echo ""
 
 if [[ "${AUTO_YES}" != "true" ]]; then
   read -r -p "Folytatod a torlest? [y/N] " confirm
@@ -155,14 +171,22 @@ if [[ "${AUTO_YES}" != "true" ]]; then
   fi
 fi
 
-for name in "${SECRETS_TO_DELETE[@]}"; do
+for name in "${SECRETS_TO_DELETE[@]-}"; do
+  [[ -z "${name}" ]] && continue
   echo "Secret torlese: ${name}"
   gh secret delete "${name}" --repo "${GITHUB_REPO}" --app actions
 done
 
-for name in "${VARIABLES_TO_DELETE[@]}"; do
+for name in "${VARIABLES_TO_DELETE[@]-}"; do
+  [[ -z "${name}" ]] && continue
   echo "Variable torlese: ${name}"
   gh variable delete "${name}" --repo "${GITHUB_REPO}"
+done
+
+for run_id in "${WORKFLOW_RUN_IDS_TO_DELETE[@]-}"; do
+  [[ -z "${run_id}" ]] && continue
+  echo "Workflow run torlese: ${run_id}"
+  gh api --method DELETE "repos/${GITHUB_REPO}/actions/runs/${run_id}" >/dev/null
 done
 
 echo ""

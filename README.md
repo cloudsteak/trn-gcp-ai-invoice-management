@@ -43,8 +43,8 @@ gcloud auth application-default login          # helyi backend futtatáshoz (ADC
 ### 4. Aktuális projekt beállítása
 
 ```bash
-gcloud config set project "${GCP_PROJECT_ID}"
-gcloud auth application-default set-quota-project "${GCP_PROJECT_ID}"
+gcloud config set project "${GCP_PROJECT_ID}"                              # alapértelmezett projekt a gcloud CLI parancsokhoz
+gcloud auth application-default set-quota-project "${GCP_PROJECT_ID}"    # számlázási/kvóta projekt a helyi ADC-hez (Gemini hívások)
 ```
 
 ### 5. Infrastruktúra telepítése
