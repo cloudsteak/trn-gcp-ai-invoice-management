@@ -4,22 +4,92 @@ PDF és képfájl alapú számlák automatikus feldolgozása a **Google Cloud Do
 
 ## Tartalom
 
-1. [Általános ismerető](#1-általános-ismerető) *(ez a szekció)*
-2. [Számla feldolgozás Document AI-val](#2-számla-feldolgozás-document-ai-val)
-3. [Validáció és kiegészítés Gemini AI Studioval](#3-validáció-és-kiegészítés-gemini-ai-studioval)
-4. [Skálázható felhő alapú megoldás](#4-skálázható-felhő-alapú-megoldás)
+1. [Gcloud telepítés](#gcloud-telepítés)
+2. [Általános ismerető](#általános-ismerető)
+3. [Skálázható felhő alapú megoldás](#skálázható-felhő-alapú-megoldás)
 
 ---
 
-## 1. Általános ismerető
+## Gcloud telepítés
 
-Ez a projekt **három alap módon** mutatja be ugyanazt a számlafeldolgozási feladatot:
+Gyors útmutató a GCP-re való telepítéshez. Részletek alább a [Skálázható felhő alapú megoldás](#skálázható-felhő-alapú-megoldás) szekcióban.
 
-| Módszer | Célcsoport | Infrastruktúra |
-|---------|------------|----------------|
-| **Document AI Console** | Gyors kipróbálás, egyedi számlák | GCP Console – Invoice Parser processzor |
-| **Gemini AI Studio** | Fejlesztők, prompt finomhangolás | Nincs – AI Studio + prompt |
-| **Felhő alapú alkalmazás** | Csapatok, production, batch feldolgozás | GCP Cloud Run + GitHub Actions |
+**Előfeltételek:** `gcloud` CLI, `gh` CLI, GCP projekt számlázással, Document AI Invoice Parser processzor (`eu` régió).
+
+### 1. Bejelentkezés GCP-be
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+```
+
+### 2. Aktuális projekt beállítása
+
+```bash
+gcloud config set project <a-gcp-projekt-id>
+```
+
+### 3. Környezeti változók beállítása
+
+```bash
+export GCP_PROJECT_ID=<a-gcp-projekt-id>
+export GCP_REGION=europe-west1
+export BACKEND_SERVICE=invoice-processor-backend
+export FRONTEND_SERVICE=invoice-processor-frontend
+export GITHUB_REPO=<szervezet>/<repo-nev>
+```
+
+### 4. Infrastruktúra telepítése
+
+```bash
+./scripts/setup.sh
+```
+
+A script bekéri a **Document AI Processor ID**-t. Ha még nincs processzor: [GCP Console → Document AI](https://console.cloud.google.com/ai/document-ai) → **Create Processor** → **Invoice Parser** → régió: `eu`.
+
+### 5. GitHub Actions hitelesítés (WIF)
+
+```bash
+./scripts/setup-wif.sh
+```
+
+### 6. GitHub Secrets és Variables
+
+```bash
+gh auth login
+./scripts/setup-github.sh
+```
+
+### 7. Alkalmazás deploy
+
+```bash
+git push origin main
+```
+
+Ellenőrzés: GitHub → **Actions** fül.
+
+### 8. Tesztelés
+
+```bash
+PROJECT_NUMBER="$(gcloud projects describe "${GCP_PROJECT_ID}" --format='value(projectNumber)')"
+BACKEND_URL="https://invoice-processor-backend-${PROJECT_NUMBER}.${GCP_REGION}.run.app"
+FRONTEND_URL="https://invoice-processor-frontend-${PROJECT_NUMBER}.${GCP_REGION}.run.app"
+
+curl "${BACKEND_URL}/health"
+echo "Nyisd meg: ${FRONTEND_URL}"
+```
+
+### 9. Erőforrások törlése (demo újraindítás)
+
+```bash
+./scripts/teardown.sh
+./scripts/teardown-wif.sh
+./scripts/teardown-github.sh
+```
+
+---
+
+## Általános ismerető
 
 A teljes alkalmazás **Document AI + Gemini** pipeline-t használ:
 
@@ -29,76 +99,7 @@ A teljes alkalmazás **Document AI + Gemini** pipeline-t használ:
 
 ---
 
-## 2. Számla feldolgozás Document AI-val
-
-A Google Cloud Document AI **Invoice Parser** processzorával közvetlenül a GCP Console-ban is kipróbálható a számlakinyerés – **nem kell kódot írni**.
-
-### Előfeltételek
-
-- GCP projekt, számlázás engedélyezve
-- `documentai.googleapis.com` API engedélyezve
-- Számla **PDF vagy kép** formátumban
-
-### Lépések
-
-1. Nyisd meg: [GCP Console → Document AI](https://console.cloud.google.com/ai/document-ai)
-2. **Create Processor** → **Invoice Parser** → régió: `eu`
-3. Tölts fel egy tesztszámlát a processzor teszt felületén
-4. Ellenőrizd a kinyert mezőket: `supplier_name`, `supplier_tax_id`, `invoice_date`, `net_amount`, `total_amount`, stb.
-
-### Mit tanulsz ebből?
-
-- A Document AI **előre tanított** Invoice Parser modellt használ – nincs saját ML modell tanítás
-- Strukturált entitásokat ad vissza konfidencia értékkel
-- Magyar és angol számlákon is működik (a demo batch mindkettőt tartalmazza)
-
-### Korlátok
-
-- Manuális folyamat – nincs batch feldolgozás, export, validáció
-- Hiányzó mezők nem pótlódnak automatikusan
-- Könyvelői értékelés és ÁFA-ellenőrzés nincs – ehhez a [3.](#3-validáció-és-kiegészítés-gemini-ai-studioval) vagy [4.](#4-skálázható-felhő-alapú-megoldás) szekció szükséges
-
----
-
-## 3. Validáció és kiegészítés Gemini AI Studioval
-
-A [Google AI Studio](https://aistudio.google.com) felületen kipróbálható a Gemini-alapú validáció és könyvelői értékelés – a Document AI által kinyert JSON és a számla szövege együtt.
-
-### Előfeltételek
-
-- Google-fiók AI Studio hozzáféréssel
-
-### Lépések
-
-1. Nyisd meg: [https://aistudio.google.com](https://aistudio.google.com)
-2. Válassz modellt: `gemini-3.1-flash-lite`
-3. Illeszd be az alábbi system promptot
-4. Ellenőrizd a választ
-
-### Validációs prompt (rövidített)
-
-```
-Te egy tapasztalt magyar könyvelő és pénzügyi ellenőr vagy.
-Egészítsd ki a hiányzó mezőket, ellenőrizd az ÁFA számítást,
-keresd az anomáliákat. Ha az eladó adószáma hiányzik, az HIBA.
-Írj 3-5 mondatos könyvelői értékelést magyarul.
-```
-
-A teljes prompt a [`backend/services/gemini.py`](backend/services/gemini.py) fájlban van implementálva.
-
-### Mire jó ez a módszer?
-
-- **Prompt iteráció** – validációs szabályok finomhangolása
-- **Prototípus** – a felhő alkalmazás Gemini logikája innen származtatható
-
-### Korlátok
-
-- Nem skálázható batch forgalomra
-- Nincs fájlfeltöltés, export, UI – ehhez a [4. szekció](#4-skálázható-felhő-alapú-megoldás) szükséges
-
----
-
-## 4. Skálázható felhő alapú megoldás
+## Skálázható felhő alapú megoldás
 
 Ez a repository **production-ready** megoldást ad: React frontend, FastAPI backend, Document AI + Gemini integráció, Cloud Run deploy és GitHub Actions CI/CD.
 
@@ -278,6 +279,8 @@ cd frontend && npm install && npm run lint && npm run build
 ```
 
 ### GCP telepítés és tesztelés
+
+> **Gyors útmutató:** A lépések rövid összefoglalója a [Gcloud telepítés](#gcloud-telepítés) szekcióban.
 
 #### Telepítési sorrend (ajánlott)
 
