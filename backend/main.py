@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from routers import upload, process, export
 
-
 # FastAPI alkalmazás példány létrehozása
 app = FastAPI(
     title="Intelligens Számlafeldolgozó API",
