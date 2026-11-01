@@ -22,3 +22,4 @@ frontend/dist/
 .idea/
 .vscode/
 Claude.md
+tmp_extract_pdf.py
