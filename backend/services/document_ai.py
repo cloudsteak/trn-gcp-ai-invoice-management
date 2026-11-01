@@ -10,7 +10,7 @@ from google.cloud import documentai_v1 as documentai
 
 from config import settings
 from models.invoice import InvoiceData, InvoiceLineItem
-from utils.api_trace import clip_text, record_api_call  # CSAK AZ API-NÉZET MIATT
+from utils.api_trace import annotate_last_trace, clip_text, record_api_call  # CSAK AZ API-NÉZET MIATT
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -197,6 +197,10 @@ def _docai_response_summary(document: documentai.Document) -> dict:
     text = document.text or ""
     shown = [_entity_brief(entity) for entity in entities[:40]]
     return {
+        "note": (
+            "Invoice Parser kimenet. A mezőfelismerés tévedhet; "
+            "a könyvelői szöveg külön, az AI model hívásban van."
+        ),
         "text_length": len(text),
         "text_excerpt": clip_text(text, 2500),
         "page_count": len(document.pages),
@@ -352,6 +356,11 @@ async def process_document(file_path: str, file_name: str) -> tuple[InvoiceData,
 
     if avg_confidence is not None and avg_confidence < 0.7:
         logger.warning(f"Alacsony konfidencia ({avg_confidence:.2f}): {file_name}")
+
+    # CSAK AZ API-NÉZET MIATT – a parserből kiolvasott mezők a DOCAI kártyán
+    annotate_last_trace("Document AI", {
+        "parsed_invoice": invoice_data.model_dump(mode="json"),
+    })
 
     logger.info(f"Document AI feldolgozás kész: {file_name}")
     return invoice_data, raw_text
