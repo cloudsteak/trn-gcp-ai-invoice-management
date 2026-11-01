@@ -2,16 +2,15 @@
 <!-- What does this PR do and why? 1-3 sentences. -->
 
 ## Changes
-<!-- Key changes, bullet points. -->
+<!-- Key changes, a few bullets. -->
 -
 
 ## Testing
-<!-- How was this tested? Commands, environments, screenshots. -->
-- [ ] Tested locally
-- [ ] Tests added/updated
+<!-- What did you run or check? -->
+-
 
 ## Risks / Rollback
-<!-- Anything that could break? How to roll back? Write "None" if not applicable. -->
+<!-- What could break? How to roll back? Write "None" if not applicable. -->
 
 ## Related
-<!-- Ticket or issue link, e.g. Closes #123 -->
+<!-- Ticket or issue link, e.g. Closes #123. Remove if none. -->
