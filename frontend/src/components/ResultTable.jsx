@@ -7,8 +7,10 @@ import { formatAmount } from '../utils/formatters.js';
 /**
  * Props:
  *   results – InvoiceResult objektumok tömbje
+ *   onPreview(fileId) – eredeti számla megnyitása
+ *   canPreview(fileId) – van-e helyben megjeleníthető fájl
  */
-function ResultTable({ results = [] }) {
+function ResultTable({ results = [], onPreview, canPreview }) {
   // Megnyitott részletező panel azonosítója
   const [openFileId, setOpenFileId] = useState(null);
   // Státusz szerinti szűrő
@@ -78,7 +80,23 @@ function ResultTable({ results = [] }) {
                   onClick={() => toggleDetail(result.file_id)}
                   className="border-t border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors"
                 >
-                  <td className="px-3 py-2 text-blue-700 underline">{result.file_name}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-3">
+                      <span className="min-w-0 break-all text-blue-700 underline">{result.file_name}</span>
+                      {onPreview && canPreview?.(result.file_id) && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onPreview(result.file_id);
+                          }}
+                          className="shrink-0 text-xs font-medium text-blue-700 hover:underline"
+                        >
+                          Megtekintés
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-gray-700">
                     {result.invoice_data?.supplier_name || '–'}
                   </td>

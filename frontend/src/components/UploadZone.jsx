@@ -32,7 +32,10 @@ function UploadZone({ onFilesAdded, disabled = false }) {
       try {
         // Fájlok feltöltése a backendre
         const result = await uploadFiles(acceptedFiles);
-        onFilesAdded(result.files);
+        onFilesAdded(result.files.map((meta, index) => ({
+          ...meta,
+          localFile: acceptedFiles[index],
+        })));
       } catch (err) {
         setError('Feltöltési hiba: ' + (err.message || 'Ismeretlen hiba'));
       } finally {

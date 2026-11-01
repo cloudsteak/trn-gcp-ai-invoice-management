@@ -8,10 +8,11 @@ import React from 'react';
  *   files    – feltöltött fájlok tömbje { file_id, file_name, status, size? }
  *   onRemove(fileId) – fájl törlésének callback-je
  *   onClearAll() – összes fájl törlése
+ *   onPreview(fileId) – számla megnyitása a betekintőben
  *   disabled – letiltja a törlést feldolgozás alatt
  *   clearing – törlés folyamatban
  */
-function FileList({ files = [], onRemove, onClearAll, disabled = false, clearing = false }) {
+function FileList({ files = [], onRemove, onClearAll, onPreview, disabled = false, clearing = false }) {
   if (!files.length) return null;
 
   return (
@@ -42,7 +43,20 @@ function FileList({ files = [], onRemove, onClearAll, disabled = false, clearing
         <tbody>
           {files.map((file) => (
             <tr key={file.file_id} className="border-t border-gray-100 hover:bg-gray-50">
-              <td className="px-3 py-2 text-gray-800">{file.file_name}</td>
+              <td className="px-3 py-2 text-gray-800">
+                <div className="flex items-center gap-3">
+                  <span className="min-w-0 break-all">{file.file_name}</span>
+                  {file.previewUrl && onPreview && (
+                    <button
+                      type="button"
+                      onClick={() => onPreview(file.file_id)}
+                      className="shrink-0 text-blue-700 hover:underline"
+                    >
+                      Megtekintés
+                    </button>
+                  )}
+                </div>
+              </td>
               <td className="px-3 py-2">
                 {/* Státusz ikon megjelenítése */}
                 <StatusIcon status={file.status} />

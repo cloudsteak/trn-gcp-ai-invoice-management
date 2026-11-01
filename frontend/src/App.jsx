@@ -6,6 +6,7 @@ import ProcessButton from './components/ProcessButton.jsx';
 import ResultTable from './components/ResultTable.jsx';
 import ExportBar from './components/ExportBar.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
+import DocumentPreview from './components/DocumentPreview.jsx';
 import ApiTracePanel, { ApiTraceToggle } from './components/ApiTracePanel.jsx'; // CSAK AZ API-NÉZET MIATT
 import { useProcessing } from './hooks/useProcessing.js';
 import { useUpload } from './hooks/useUpload.js';
@@ -24,6 +25,7 @@ function App() {
   );
   const [clearing, setClearing] = useState(false);
   const [clearError, setClearError] = useState(null);
+  const [previewFileId, setPreviewFileId] = useState(null);
 
   // CSAK AZ API-NÉZET MIATT
   useEffect(() => {
@@ -40,6 +42,10 @@ function App() {
 
   const isProcessing = status === 'processing';
   const hasResults = results.length > 0;
+  const previewFile = uploadedFiles.find((file) => file.file_id === previewFileId) || null;
+  const canPreview = (fileId) => uploadedFiles.some(
+    (file) => file.file_id === fileId && file.previewUrl
+  );
 
   const handleProcess = () => {
     startProcessing(uploadedFiles.map((f) => f.file_id));
@@ -86,7 +92,7 @@ function App() {
       {/* CSAK AZ API-NÉZET MIATT – nyitott panelnél a lista a tartalom mellé kerül */}
       <div className={showApiCalls ? 'flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]' : ''}>
       {/* Fő tartalom. Az order-* osztály CSAK AZ API-NÉZET MIATT van itt, nyitott panelnél. */}
-      <main className={`mx-auto px-4 py-8 space-y-6 ${showApiCalls ? 'order-2 lg:order-1 max-w-none' : 'max-w-6xl'}`}>
+      <main className={`px-4 py-8 space-y-6 ${showApiCalls ? 'order-2 lg:order-1 w-full min-w-0' : 'mx-auto max-w-6xl'}`}>
         {/* Feltöltési szekció */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">
@@ -99,6 +105,7 @@ function App() {
                 files={uploadedFiles}
                 onRemove={removeFile}
                 onClearAll={handleClearAll}
+                onPreview={setPreviewFileId}
                 disabled={isProcessing}
                 clearing={clearing}
               />
@@ -131,7 +138,11 @@ function App() {
               )}
             </div>
             {hasResults ? (
-              <ResultTable results={results} />
+              <ResultTable
+                results={results}
+                onPreview={setPreviewFileId}
+                canPreview={canPreview}
+              />
             ) : (
               <p className="text-gray-500 text-sm text-center py-6">
                 Az első számla feldolgozása folyamatban...
@@ -151,6 +162,15 @@ function App() {
       {/* CSAK AZ API-NÉZET MIATT */}
       {showApiCalls && <ApiTracePanel calls={apiCalls} />}
       </div>
+
+      {previewFile?.previewUrl && (
+        <DocumentPreview
+          fileName={previewFile.file_name}
+          url={previewFile.previewUrl}
+          mimeType={previewFile.previewType}
+          onClose={() => setPreviewFileId(null)}
+        />
+      )}
 
       {/* Lábléc */}
       <footer className="text-center text-gray-400 text-xs py-6">
