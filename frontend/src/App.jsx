@@ -86,7 +86,7 @@ function App() {
       {/* CSAK AZ API-NÉZET MIATT – nyitott panelnél a lista a tartalom mellé kerül */}
       <div className={showApiCalls ? 'flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]' : ''}>
       {/* Fő tartalom. Az order-* osztály CSAK AZ API-NÉZET MIATT van itt, nyitott panelnél. */}
-      <main className={`mx-auto px-4 py-8 space-y-6 ${showApiCalls ? 'order-2 lg:order-1 max-w-none' : 'max-w-6xl'}`}>
+      <main className={`px-4 py-8 space-y-6 ${showApiCalls ? 'order-2 lg:order-1 w-full min-w-0' : 'mx-auto max-w-6xl'}`}>
         {/* Feltöltési szekció */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">
