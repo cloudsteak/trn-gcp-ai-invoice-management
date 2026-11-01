@@ -36,6 +36,13 @@ def clip_text(text: str | None, limit: int = 4000) -> str:
     return text[:limit] + f"\n… ({len(text)} karakterből az első {limit} látható)"
 
 
+def _layer_for_service(service: str) -> str:
+    """Document AI és a nyelvi modell külön réteg a panelen."""
+    if "document" in service.lower():
+        return "docai"
+    return "ai"
+
+
 def record_api_call(
     *,
     service: str,
@@ -54,6 +61,7 @@ def record_api_call(
         bucket.append(
             ApiCallTrace(
                 direction="be-ai",
+                layer=_layer_for_service(service),
                 service=service,
                 operation=operation,
                 status=status,
@@ -66,3 +74,19 @@ def record_api_call(
         )
     except Exception as exc:
         logger.warning(f"API nyom rögzítése sikertelen: {exc}")
+
+
+def annotate_last_trace(service: str, extra: dict) -> None:
+    """Az utolsó sikeres hívás válaszához hozzáírja a backend által értelmezett kimenetet."""
+    try:
+        bucket = _bucket.get()
+        if not bucket:
+            return
+        for trace in reversed(bucket):
+            if trace.service == service and trace.status == "ok":
+                response = dict(trace.response or {})
+                response.update(extra)
+                trace.response = response
+                return
+    except Exception as exc:
+        logger.warning(f"API nyom kiegészítése sikertelen: {exc}")

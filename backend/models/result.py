@@ -24,8 +24,9 @@ class ValidationIssue(BaseModel):
 
 # CSAK AZ API-NÉZET MIATT – a számla eredményéhez nem kell, a panel olvassa
 class ApiCallTrace(BaseModel):
-    """Egy Backend → AI hívás oktatási nyoma (Document AI vagy Gemini)."""
+    """Egy kimenő AI hívás oktatási nyoma. layer: docai vagy ai."""
     direction: str = "be-ai"
+    layer: str = "ai"
     service: str
     operation: str
     status: str

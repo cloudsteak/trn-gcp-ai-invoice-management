@@ -90,7 +90,7 @@ function stripAiTraces(data) {
       delete rest.api_calls;
       return {
         ...rest,
-        api_calls: `(${count} hívás a Backend → AI listában)`,
+        api_calls: `(${count} hívás a DOCAI és az AI model listában)`,
       };
     });
   }
@@ -111,6 +111,11 @@ function errorMessage(error) {
   return error.message || 'Hálózati hiba';
 }
 
+function pollStatusOf(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  return typeof body.status === 'string' ? body.status : null;
+}
+
 function logFromAxios(config, response, error) {
   if (!config) return;
   const started = config.metadata?.startedAt ?? performance.now();
@@ -122,22 +127,44 @@ function logFromAxios(config, response, error) {
   const responseBody = rawBody === undefined
     ? (error ? { error: errorMessage(error) } : null)
     : clipValue(stripAiTraces(rawBody));
+  const pollStatus = pollStatusOf(rawBody);
+  const operation = `${method} ${path}`;
+  const beOk = httpStatus >= 200 && httpStatus < 400;
 
   logCall({
     id: crypto.randomUUID(),
     at: config.metadata?.startedIso || new Date().toISOString(),
-    direction: 'fe-be',
-    service: 'Backend',
-    operation: `${method} ${path}`,
+    layer: 'fe',
+    service: 'Frontend',
+    operation,
     method,
     path,
-    status: httpStatus >= 200 && httpStatus < 400 ? 'ok' : 'error',
+    status: 'ok',
+    httpStatus: null,
+    durationMs: null,
+    requestBody: describeRequestBody(config.data),
+    responseBody: null,
+    error: null,
+    fileName: null,
+    pollStatus,
+  });
+
+  logCall({
+    id: crypto.randomUUID(),
+    at: new Date().toISOString(),
+    layer: 'be',
+    service: 'Backend',
+    operation,
+    method,
+    path,
+    status: beOk ? 'ok' : 'error',
     httpStatus: httpStatus || null,
     durationMs,
-    requestBody: describeRequestBody(config.data),
+    requestBody: null,
     responseBody,
     error: errorMessage(error),
     fileName: null,
+    pollStatus,
   });
 }
 

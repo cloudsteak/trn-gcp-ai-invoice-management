@@ -1,5 +1,5 @@
 // CSAK AZ API-NÉZET MIATT – ez az egész fájl.
-// Memóriában tartja a Frontend → Backend és Backend → AI hívásokat, amiket a panel kiír.
+// Memóriában tartja a négy réteget: FE, BE, DOCAI, AI model.
 // A számlafeldolgozás eredményét nem módosítja.
 const listeners = new Set();
 
@@ -14,14 +14,21 @@ function isRepeatPoll(previous, next) {
   return Boolean(
     previous
     && next
-    && previous.direction === 'fe-be'
-    && next.direction === 'fe-be'
+    && previous.layer === next.layer
+    && (previous.layer === 'fe' || previous.layer === 'be')
     && previous.method === 'GET'
     && next.method === 'GET'
     && previous.path === next.path
-    && previous.responseBody?.status === 'processing'
-    && next.responseBody?.status === 'processing'
+    && previous.pollStatus === 'processing'
+    && next.pollStatus === 'processing'
   );
+}
+
+function lastOfLayer(layer) {
+  for (let i = calls.length - 1; i >= 0; i -= 1) {
+    if (calls[i].layer === layer) return i;
+  }
+  return -1;
 }
 
 export function getCalls() {
@@ -42,37 +49,45 @@ export function clearCallLog() {
 }
 
 export function logCall(entry) {
-  const previous = calls[calls.length - 1];
+  const matchIndex = lastOfLayer(entry.layer);
+  const previous = matchIndex >= 0 ? calls[matchIndex] : null;
   if (previous && isRepeatPoll(previous, entry)) {
-    calls = [
-      ...calls.slice(0, -1),
-      {
-        ...previous,
-        pollCount: (previous.pollCount || 1) + 1,
-        durationMs: entry.durationMs,
-        responseBody: entry.responseBody,
-        httpStatus: entry.httpStatus,
-        status: entry.status,
-        error: entry.error,
-      },
-    ];
+    const updated = [...calls];
+    updated[matchIndex] = {
+      ...previous,
+      pollCount: (previous.pollCount || 1) + 1,
+      durationMs: entry.durationMs ?? previous.durationMs,
+      requestBody: entry.requestBody ?? previous.requestBody,
+      responseBody: entry.responseBody ?? previous.responseBody,
+      httpStatus: entry.httpStatus ?? previous.httpStatus,
+      status: entry.status,
+      error: entry.error,
+      pollStatus: entry.pollStatus,
+    };
+    calls = updated;
   } else {
     calls = [...calls, { pollCount: 1, ...entry, seq: ++seq }];
   }
   emit();
 }
 
+function layerOfBackendCall(call) {
+  if (call.layer === 'docai' || call.layer === 'ai') return call.layer;
+  return /document/i.test(call.service || '') ? 'docai' : 'ai';
+}
+
 /**
- * A feldolgozás eredményében érkező Backend → AI hívások beillesztése.
+ * A feldolgozás eredményében érkező DOCAI és AI model hívások beillesztése.
  * Az időbélyeg a szerveré, így a pollok közé rendeződnek.
  */
 export function logBackendAiCalls(fileName, apiCalls) {
   if (!apiCalls?.length) return;
   apiCalls.forEach((call) => {
+    const layer = layerOfBackendCall(call);
     logCall({
       id: crypto.randomUUID(),
       at: call.occurred_at || new Date().toISOString(),
-      direction: 'be-ai',
+      layer,
       service: call.service,
       operation: call.operation,
       method: call.request?.method || 'POST',

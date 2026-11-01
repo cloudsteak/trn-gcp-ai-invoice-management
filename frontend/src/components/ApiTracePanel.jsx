@@ -6,8 +6,10 @@ import { clearCallLog } from '../services/callLog.js';
 
 const FILTERS = [
   { id: 'all', label: 'Mind' },
-  { id: 'fe-be', label: 'FE ↔ BE' },
-  { id: 'be-ai', label: 'BE ↔ AI' },
+  { id: 'fe', label: 'FE' },
+  { id: 'be', label: 'BE' },
+  { id: 'docai', label: 'DOCAI' },
+  { id: 'ai', label: 'AI model' },
 ];
 
 function formatTime(iso) {
@@ -35,12 +37,23 @@ function formatJson(value) {
   }
 }
 
-function directionLabel(direction) {
-  return direction === 'be-ai' ? 'BE → AI' : 'FE → BE';
+function callLayer(call) {
+  if (call.layer) return call.layer;
+  if (/document/i.test(call.service || '')) return 'docai';
+  if (call.service === 'Gemini' || call.service === 'AI model') return 'ai';
+  return 'fe';
+}
+
+function layerLabel(layer) {
+  if (layer === 'fe') return 'FE';
+  if (layer === 'be') return 'BE';
+  if (layer === 'docai') return 'DOCAI';
+  return 'AI model';
 }
 
 function cardTitle(call) {
-  if (call.direction === 'be-ai') {
+  const layer = callLayer(call);
+  if (layer === 'docai' || layer === 'ai') {
     return `${call.service} · ${call.operation}`;
   }
   const repeats = call.pollCount > 1 ? ` × ${call.pollCount}` : '';
@@ -48,15 +61,31 @@ function cardTitle(call) {
 }
 
 function accentClass(call) {
-  if (call.status !== 'ok') return 'border-red-400';
-  if (call.service === 'Document AI') return 'border-amber-400';
-  if (call.service === 'Gemini') return 'border-violet-400';
+  if (call.status !== 'ok' && callLayer(call) !== 'fe') return 'border-red-400';
+  const layer = callLayer(call);
+  if (layer === 'be') return 'border-teal-400';
+  if (layer === 'docai') return 'border-amber-400';
+  if (layer === 'ai') return 'border-violet-400';
   return 'border-sky-400';
 }
 
 function badgeClass(call) {
-  if (call.direction === 'be-ai') return 'bg-violet-100 text-violet-800';
+  const layer = callLayer(call);
+  if (layer === 'be') return 'bg-teal-100 text-teal-800';
+  if (layer === 'docai') return 'bg-amber-100 text-amber-900';
+  if (layer === 'ai') return 'bg-violet-100 text-violet-800';
   return 'bg-sky-100 text-sky-800';
+}
+
+function statusLabel(call) {
+  if (callLayer(call) === 'fe') return 'kérés';
+  if (call.httpStatus) return String(call.httpStatus);
+  return call.status === 'ok' ? 'OK' : 'HIBA';
+}
+
+function statusClass(call) {
+  if (callLayer(call) === 'fe') return 'text-sky-700';
+  return call.status === 'ok' ? 'text-emerald-700' : 'text-red-600';
 }
 
 export function ApiTraceToggle({ pressed, count, onToggle }) {
@@ -95,14 +124,15 @@ export function ApiTraceToggle({ pressed, count, onToggle }) {
 }
 
 function callJson(call) {
+  const layer = callLayer(call);
   return {
-    direction: directionLabel(call.direction),
+    layer: layerLabel(layer),
     service: call.service,
     operation: call.operation,
     status: call.httpStatus || call.status,
     duration_ms: call.durationMs,
-    request: call.requestBody,
-    response: call.responseBody,
+    request: layer === 'be' ? undefined : call.requestBody,
+    response: layer === 'fe' ? undefined : call.responseBody,
     error: call.error,
   };
 }
@@ -128,7 +158,7 @@ function ApiTracePanel({ calls }) {
   const stickRef = useRef(true);
   const copyTimer = useRef(null);
 
-  const visible = filter === 'all' ? calls : calls.filter((call) => call.direction === filter);
+  const visible = filter === 'all' ? calls : calls.filter((call) => callLayer(call) === filter);
   const visibleCount = visible.length;
   const lastCallId = visible[visibleCount - 1]?.id ?? '';
 
@@ -190,7 +220,7 @@ function ApiTracePanel({ calls }) {
           <div>
             <h2 className="text-sm font-semibold text-gray-900">API hívások</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Frontend ↔ Backend és Backend ↔ AI
+              FE · BE · DOCAI · AI model
             </p>
           </div>
           <button
@@ -202,11 +232,11 @@ function ApiTracePanel({ calls }) {
             Törlés
           </button>
         </div>
-        <div className="flex gap-1 mt-3" role="tablist" aria-label="Hívások szűrése">
+        <div className="flex flex-wrap gap-1 mt-3" role="tablist" aria-label="Hívások szűrése">
           {FILTERS.map((item) => {
             const count = item.id === 'all'
               ? calls.length
-              : calls.filter((call) => call.direction === item.id).length;
+              : calls.filter((call) => callLayer(call) === item.id).length;
             const active = filter === item.id;
             return (
               <button
@@ -231,7 +261,7 @@ function ApiTracePanel({ calls }) {
         {visible.length === 0 ? (
           <p className="text-sm text-gray-500 leading-relaxed px-1 py-6 text-center">
             Még nincs rögzített hívás. Tölts fel egy számlát, vagy indítsd a feldolgozást.
-            A feltöltés, a státuszlekérdezés, a Document AI és a Gemini hívások itt jelennek meg.
+            A FE a böngésző kérését, a BE a backend válaszát, a DOCAI az Invoice Parser kimenetét, az AI model a Gemini értékelést mutatja.
           </p>
         ) : (
           visible.map((call) => {
@@ -247,17 +277,17 @@ function ApiTracePanel({ calls }) {
                   <div className="flex items-center gap-2 text-[11px]">
                     <span className="text-gray-400 tabular-nums">{formatTime(call.at)}</span>
                     <span className={`rounded px-1.5 py-0.5 font-semibold ${badgeClass(call)}`}>
-                      {directionLabel(call.direction)}
+                      {layerLabel(callLayer(call))}
                     </span>
-                    <span className={`ml-auto font-medium ${call.status === 'ok' ? 'text-emerald-700' : 'text-red-600'}`}>
-                      {call.httpStatus || (call.status === 'ok' ? 'OK' : 'HIBA')}
+                    <span className={`ml-auto font-medium ${statusClass(call)}`}>
+                      {statusLabel(call)}
                     </span>
                   </div>
                   <p className="mt-1 text-sm font-medium text-gray-900 break-all">
                     {cardTitle(call)}
                   </p>
                   <p className="mt-0.5 text-xs text-gray-500">
-                    {formatDuration(call.durationMs)}
+                    {call.durationMs != null ? formatDuration(call.durationMs) : 'elküldve'}
                     {call.fileName ? ` · ${call.fileName}` : ''}
                     {attempt > 1 ? ` · kísérlet ${attempt}` : ''}
                     {call.pollCount > 1 ? ' · folyamatban, ismétlődő lekérdezés' : ''}
@@ -279,8 +309,13 @@ function ApiTracePanel({ calls }) {
                 </button>
                 {open && (
                   <div className="px-3 pb-3 space-y-3 border-t border-gray-200 pt-3">
-                    <JsonBlock title="Kérés" value={call.requestBody} />
-                    <JsonBlock title="Válasz" value={call.responseBody} />
+                    {callLayer(call) !== 'be' && (
+                      <JsonBlock title="Kérés" value={call.requestBody} />
+                    )}
+                    {callLayer(call) !== 'fe' && (
+                      <JsonBlock title="Válasz" value={call.responseBody} />
+                    )}
+                    {call.error && <JsonBlock title="Hiba" value={call.error} />}
                     <button
                       type="button"
                       onClick={() => copyCall(call)}
