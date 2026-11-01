@@ -12,6 +12,7 @@ from models.result import InvoiceResult, InvoiceStatus, ValidationIssue
 from services.document_ai import process_document
 from services.gemini import validate_invoice
 from utils.amount_validation import validate_amounts
+from utils.api_trace import begin_api_traces, reset_api_traces, snapshot_api_traces  # CSAK AZ API-NÉZET MIATT
 from utils.file_handler import get_original_filename, resolve_upload_file_path
 from utils.logger import get_logger
 from utils.pdf_text import extract_text_from_pdf
@@ -225,7 +226,21 @@ async def _process_via_pdf_fallback(
     )
 
 
+# CSAK AZ API-NÉZET MIATT.
+# A feldolgozás a _process_invoice. Ez a burkoló csak ráakasztja a Document AI
+# és Gemini hívások oktatási másolatát. Nélküle a számla eredménye ugyanaz.
 async def process_invoice(file_id: str, upload_dir: str) -> InvoiceResult:
+    """Feldolgozás, a Document AI és Gemini hívások nyomával kiegészítve."""
+    token = begin_api_traces()
+    try:
+        result = await _process_invoice(file_id, upload_dir)
+        result.api_calls = snapshot_api_traces()
+        return result
+    finally:
+        reset_api_traces(token)
+
+
+async def _process_invoice(file_id: str, upload_dir: str) -> InvoiceResult:
     """
     Egyetlen számla teljes feldolgozása:
     1. Document AI – strukturált adatkinyerés
