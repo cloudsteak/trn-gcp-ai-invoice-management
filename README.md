@@ -18,9 +18,12 @@ Gyors útmutató a GCP-re való telepítéshez. Részletek alább a [Skálázhat
 
 ### 1. Document AI processzor létrehozása
 
-[GCP Console → Document AI](https://console.cloud.google.com/ai/document-ai) → **Create Processor** → **Invoice Parser** → régió: **`eu`**
+[GCP Console > Document AI](https://console.cloud.google.com/ai/document-ai) > **Processor Gallery** > **Invoice Parser**:
+- Adj neki egy nevet, például: szamla-feldolgozo
+- régió: **`eu`**
+- Végül kattints a **Create** gombra
 
-Másold ki a **Processor ID**-t – a következő lépésben kell.
+Másold ki az **ID** mező értéték a léterehozás után - ez a következő lépésben kell.
 
 ### 2. Környezeti változók beállítása
 
@@ -68,7 +71,7 @@ gh auth login
 ./scripts/setup-github.sh
 ```
 
-A script kilistázza a beállítandó secrets/variables értékeket, majd kérdez: `Folytatod a beallitast? [y/N]` → nyomj **`y`**, Enter.
+A script kilistázza a beállítandó secrets/variables értékeket, majd kérdez: `Folytatod a beallitast? [y/N]` > nyomj **`y`**, Enter.
 
 ### 8. Alkalmazás deploy
 
@@ -79,14 +82,14 @@ Ha a forráskódban nincs módosítás, adj hozzá egy-egy üres sort ehhez:
 
 (Ez kell ahhoz, hogy a GitHub Actions ténylegesen deployoljon.)
 
-1. GitHub repó → **Pull requests** → **New pull request** → **Create pull request**
+1. GitHub repó > **Pull requests** > **New pull request** > **Create pull request**
 2. **Merge** a PR-t a `main` branchre
 
-A GitHub Actions automatikusan deployol – pár perc múlva él az alkalmazás. Követés: **Actions** → **Deploy**.
+A GitHub Actions automatikusan deployol – pár perc múlva él az alkalmazás. Követés: **Actions** > **Deploy**.
 
 ### 9. Tesztelés
 
-1. Nyisd meg a frontend weboldalt a böngészőben. Az URL-t a `setup.sh` a végén kiírja, vagy a GCP Console → **Cloud Run** → `invoice-processor-frontend` → **URL**.
+1. Nyisd meg a frontend weboldalt a böngészőben. Az URL-t a `setup.sh` a végén kiírja, vagy a GCP Console > **Cloud Run** > `invoice-processor-frontend` > **URL**.
 2. Tölts fel egy tesztszámlát az [`invoices/`](invoices/) mappából (pl. `01_helyes_alap.pdf`), indítsd el a feldolgozást, és nézd meg az eredményt.
 
 ### 10. Erőforrások törlése (demo újraindítás)
@@ -125,7 +128,7 @@ flowchart TB
 
     subgraph GCP["☁️ Google Cloud Platform"]
         DocAI["📄 Document AI<br/>Invoice Parser"]
-        Gemini["🤖 Gemini<br/>gemini-3.1-flash-lite"]
+        Gemini["🤖 Gemini<br/>gemini-3.5-flash-lite"]
         SM["🔐 Secret Manager<br/>Processor ID"]
     end
 
@@ -159,7 +162,7 @@ flowchart TB
 | **Frontend** | React, Vite, TailwindCSS | Fájlfeltöltés, eredmény táblázat, export gombok |
 | **Backend** | FastAPI, uvicorn | Upload, batch feldolgozás, Document AI + Gemini orchestration |
 | **Document AI** | Invoice Parser (`eu`) | Strukturált adatkinyerés számlákból |
-| **Gemini API** | `gemini-3.1-flash-lite` (Vertex AI, global) | Validáció, mezőpótlás, könyvelői értékelés – **ADC, nincs API kulcs** |
+| **Gemini API** | `gemini-3.5-flash-lite` (Vertex AI, global) | Validáció, mezőpótlás, könyvelői értékelés – **ADC, nincs API kulcs** |
 | **Cloud Run** | Source deploy (buildpacks) | Skálázható futtatás HTTPS-sel |
 | **Secret Manager** | GCP titkok | Document AI Processor ID |
 | **GitHub Actions** | `lint.yml`, `deploy.yml` | Lint PR-en, deploy `main`-en (WIF, kulcs nélkül) |
@@ -181,7 +184,7 @@ flowchart TB
 
 | Eszköz | Miért kell? |
 |--------|-------------|
-| **Node.js** 20+ | Frontend futtatásához és buildhez |
+| **Node.js** 24.22.2 | Frontend futtatásához és buildhez. A 24.22.1-ben javított, 2026. október 21-i sebezhetőségek (többek között a Brotli dekóder) miatt ennél régebbi Node nem elég. |
 | **uv** ([telepítés](https://docs.astral.sh/uv/)) | Backend függőségek kezelése |
 | **gcloud CLI** | GCP infrastruktúra (`setup.sh`) és helyi ADC auth |
 | **GCP projekt** | Document AI + Cloud Run + Secret Manager |
@@ -205,7 +208,7 @@ flowchart LR
     subgraph GCP["☁️ GCP production – egyszeri + automatikus"]
         S1["1. setup.sh<br/>infrastruktúra"] --> S2["2. setup-wif.sh<br/>GitHub WIF"]
         S2 --> S3["3. setup-github.sh<br/>GitHub secrets"]
-        S3 --> S4["4. PR merge → main"]
+        S3 --> S4["4. PR merge > main"]
         S4 --> S5["deploy.yml"]
     end
 
@@ -219,9 +222,9 @@ flowchart LR
 | Infrastruktúra (API-k, SA, Secrets, üres Cloud Run) | `scripts/setup.sh` | GCP erőforrások – **nem** az alkalmazás kódját | Egyszer, projekt elején |
 | GitHub Actions WIF | `scripts/setup-wif.sh` | Kulcs nélküli CI hitelesítés | Egyszer, `setup.sh` után |
 | GitHub Secrets + Variables | `scripts/setup-github.sh` | Repository secrets/variables (`gh` CLI) | Egyszer, `setup-wif.sh` után |
-| Alkalmazás kód | **GitHub Actions** `deploy.yml` | Forráskód → Cloud Run | `main`-re merge után |
+| Alkalmazás kód | **GitHub Actions** `deploy.yml` | Forráskód > Cloud Run | `main`-re merge után |
 | Lint ellenőrzés | GitHub Actions `lint.yml` | Kódminőség PR-en | Minden pull request |
-| Demo törlése (GCP) | `scripts/teardown.sh` → `teardown-wif.sh` | Cloud Run, Secret Manager, SA, WIF | Demo újraindításkor |
+| Demo törlése (GCP) | `scripts/teardown.sh` > `teardown-wif.sh` | Cloud Run, Secret Manager, SA, WIF | Demo újraindításkor |
 | Demo törlése (GitHub) | `scripts/teardown-github.sh` | Repository secrets + variables | `teardown-wif.sh` után |
 
 > **Fontos:** A Cloud Run-ra való telepítés **alapértelmezetten a GitHub Actions-szel történik**. A `setup.sh` csak az infrastruktúrát készíti elő.
@@ -241,7 +244,7 @@ cp .env.example .env
 GCP_PROJECT_ID=<a-gcp-projekt-id>
 GCP_LOCATION=eu
 GCP_PROCESSOR_ID=<document-ai-processor-id>
-GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
 GEMINI_LOCATION=global
 CORS_ORIGINS=http://localhost:3000
 ```
@@ -297,17 +300,17 @@ cd frontend && npm install && npm run lint && npm run build
 #### Telepítési sorrend (ajánlott)
 
 ```
-0. Document AI processzor  →  Console: Invoice Parser (eu)
-1. setup.sh                →  GCP infrastruktúra (GCP_PROCESSOR_ID környezeti változóból)
-2. setup-wif.sh            →  GitHub Actions WIF (egyszer, JSON kulcs nélkül)
-3. setup-github.sh         →  GitHub Secrets + Variables (gh CLI)
-4. PR merge → main         →  alkalmazás deploy (automatikus, pár perc)
-5. tesztelés               →  weboldal + invoices/ feltöltés
+0. Document AI processzor  >  Console: Invoice Parser (eu)
+1. setup.sh                >  GCP infrastruktúra (GCP_PROCESSOR_ID környezeti változóból)
+2. setup-wif.sh            >  GitHub Actions WIF (egyszer, JSON kulcs nélkül)
+3. setup-github.sh         >  GitHub Secrets + Variables (gh CLI)
+4. PR merge > main         >  alkalmazás deploy (automatikus, pár perc)
+5. tesztelés               >  weboldal + invoices/ feltöltés
 ```
 
 #### 0. Document AI processzor
 
-1. [GCP Console → Document AI](https://console.cloud.google.com/ai/document-ai) → **Create Processor** → **Invoice Parser** → régió: **`eu`**
+1. [GCP Console > Document AI](https://console.cloud.google.com/ai/document-ai) > **Create Processor** > **Invoice Parser** > régió: **`eu`**
 2. Másold ki a **Processor ID**-t:
 
 ```bash
@@ -376,9 +379,9 @@ export GITHUB_REPO=<szervezet>/<repo-nev>   # opcionális, ha a repo gyökeréb�
 
 A script a GCP-ből számolja ki a WIF provider és CI/CD SA értékeket; a backend URL-t a Cloud Run service alapján. A variables alapértelmezései megegyeznek a `deploy.yml`-ével – felülírhatók környezeti változókkal (pl. `GEMINI_MODEL=...`).
 
-A végén megjelenik a beállítandó variables listája és a kérdés: `Folytatod a beallitast? [y/N]` → nyomj **`y`**, Enter. (Automatikus folytatás: `./scripts/setup-github.sh --yes`.)
+A végén megjelenik a beállítandó variables listája és a kérdés: `Folytatod a beallitast? [y/N]` > nyomj **`y`**, Enter. (Automatikus folytatás: `./scripts/setup-github.sh --yes`.)
 
-Manuális beállítás is lehetséges (Settings → Secrets and variables → Actions). A demo végén a [`teardown-github.sh`](#6-erőforrások-törlése-demo-újraindítás) törli ezeket.
+Manuális beállítás is lehetséges (Settings > Secrets and variables > Actions). A demo végén a [`teardown-github.sh`](#6-erőforrások-törlése-demo-újraindítás) törli ezeket.
 
 **GitHub Secrets:**
 
@@ -394,7 +397,7 @@ Manuális beállítás is lehetséges (Settings → Secrets and variables → Ac
 | Variable | Alapértelmezés |
 |----------|----------------|
 | `GCP_LOCATION` | `eu` |
-| `GEMINI_MODEL` | `gemini-3.1-flash-lite` |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` |
 | `GEMINI_LOCATION` | `global` |
 | `MAX_FILE_SIZE_MB` | `20` |
 | `MAX_FILES_PER_BATCH` | `10` |
@@ -410,14 +413,14 @@ Ha a forráskódban nincs módosítás, adj hozzá egy-egy üres sort ehhez:
 
 (Ez kell ahhoz, hogy a GitHub Actions ténylegesen deployoljon.)
 
-1. GitHub repó → **Pull requests** → **New pull request** → **Create pull request**
+1. GitHub repó > **Pull requests** > **New pull request** > **Create pull request**
 2. **Merge** a PR-t a `main` branchre
 
-A GitHub Actions automatikusan deployol (pár perc). Követés: **Actions** → **Deploy**.
+A GitHub Actions automatikusan deployol (pár perc). Követés: **Actions** > **Deploy**.
 
 #### 5. GCP tesztelés
 
-1. Nyisd meg a frontend weboldalt a böngészőben. Az URL: GCP Console → **Cloud Run** → `invoice-processor-frontend` → **URL** (a `setup.sh` is kiírja a végén).
+1. Nyisd meg a frontend weboldalt a böngészőben. Az URL: GCP Console > **Cloud Run** > `invoice-processor-frontend` > **URL** (a `setup.sh` is kiírja a végén).
 2. Tölts fel egy tesztszámlát az [`invoices/`](invoices/) mappából, indítsd el a feldolgozást, és nézd meg az eredményt. Melyik fájl mire való: [`invoices/README.md`](invoices/README.md).
 
 > Az első deploy után a valódi alkalmazás jelenik meg; a `setup.sh` placeholder image-jén még a Cloud Run „Congratulations” oldal látszik.
@@ -478,14 +481,14 @@ A script **csak a létező** értékeket törli (idempotens). A `--yes` kapcsol�
 | Variable | Alapértelmezés a `deploy.yml`-ben |
 |----------|-----------------------------------|
 | `GCP_LOCATION` | `eu` |
-| `GEMINI_MODEL` | `gemini-3.1-flash-lite` |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` |
 | `GEMINI_LOCATION` | `global` |
 | `MAX_FILE_SIZE_MB` | `20` |
 | `MAX_FILES_PER_BATCH` | `10` |
 | `UPLOAD_DIR` | `/tmp/invoices` |
 | `CORS_ORIGINS` | `*` |
 
-> **Megjegyzés:** A teljes demo újraindításhoz a fenti három script sorrendben futtatandó, majd újra `setup.sh` → `setup-wif.sh` → `setup-github.sh` → PR merge `main`-re.
+> **Megjegyzés:** A teljes demo újraindításhoz a fenti három script sorrendben futtatandó, majd újra `setup.sh` > `setup-wif.sh` > `setup-github.sh` > PR merge `main`-re.
 
 ### Működik-e?
 
@@ -524,7 +527,7 @@ A fiktív tesztszámlák az [`invoices/`](invoices/) mappában vannak. Részlete
 | `szamla_ok_en.pdf` | Szabályos angol PDF számla | ✅ Angol mezők is mappelve |
 | `szamla_afa_hiba.pdf` | ÁFA / végösszeg számítás hibás | ⚠️ Gemini figyelmeztetést jelez |
 
-**Batch demo:** Töltsd fel mind a négy fájlt egyszerre → összesített táblázat → riport → export.
+**Batch demo:** Töltsd fel mind a négy fájlt egyszerre > összesített táblázat > riport > export.
 
 ---
 
@@ -535,7 +538,7 @@ A fiktív tesztszámlák az [`invoices/`](invoices/) mappában vannak. Részlete
 | Frontend | React 18 + Vite + TailwindCSS |
 | Backend | Python 3.12 + FastAPI |
 | AI – Kinyerés | Google Cloud Document AI (Invoice Parser) |
-| AI – Validáció | Google Gemini API / Vertex AI (`gemini-3.1-flash-lite`, ADC) |
+| AI – Validáció | Google Gemini API / Vertex AI (`gemini-3.5-flash-lite`, ADC) |
 | Deployment | Google Cloud Run (source deploy, Docker nélkül) |
 | CI/CD | GitHub Actions + Workload Identity Federation |
 | Titkok | Google Cloud Secret Manager |

@@ -10,6 +10,7 @@ from google.cloud import documentai_v1 as documentai
 
 from config import settings
 from models.invoice import InvoiceData, InvoiceLineItem
+from utils.api_trace import clip_text, record_api_call  # CSAK AZ API-NÉZET MIATT
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -152,10 +153,68 @@ def _mime_type_for_path(file_path: str, file_name: str) -> str:
     return "application/octet-stream"
 
 
+# --- CSAK AZ API-NÉZET MIATT ---
+# A processDocument hívás olvasható másolata. A Document AI kérést nem módosítja.
+def _docai_request_summary(file_name: str, mime_type: str, file_size: int, attempt: int) -> dict:
+    """A processDocument hívás oktatási másolata – bináris tartalom nélkül."""
+    location = settings.gcp_location.lower()
+    host = _DOCAI_ENDPOINTS.get(location, "documentai.googleapis.com")
+    processor = get_processor_name()
+    return {
+        "method": "POST",
+        "endpoint": f"https://{host}/v1/{processor}:process",
+        "processor": processor,
+        "mime_type": mime_type,
+        "file_name": file_name,
+        "file_size_bytes": file_size,
+        "raw_document": "(bináris fájltartalom, nincs megjelenítve)",
+        "attempt": attempt,
+    }
+
+
+def _entity_brief(entity) -> dict:
+    """Egy Document AI entitás rövid, JSON-barát kivonata."""
+    item = {
+        "type": entity.type_,
+        "mention_text": clip_text(entity.mention_text, 200),
+        "confidence": round(float(entity.confidence), 3) if entity.confidence else None,
+    }
+    properties = list(entity.properties or [])
+    if properties:
+        item["properties"] = [
+            {
+                "type": prop.type_,
+                "mention_text": clip_text(prop.mention_text, 120),
+            }
+            for prop in properties[:12]
+        ]
+    return item
+
+
+def _docai_response_summary(document: documentai.Document) -> dict:
+    """A Document AI válasz oktatási kivonata: OCR részlet és entitások."""
+    entities = list(document.entities)
+    text = document.text or ""
+    shown = [_entity_brief(entity) for entity in entities[:40]]
+    return {
+        "text_length": len(text),
+        "text_excerpt": clip_text(text, 2500),
+        "page_count": len(document.pages),
+        "entity_count": len(entities),
+        "entities": shown,
+        "entities_truncated": len(entities) > 40,
+    }
+
+
+# --- API-NÉZET VÉGE ---
+
+
 async def _call_process_document_with_retry(
     client: documentai.DocumentProcessorServiceClient,
     request: documentai.ProcessRequest,
     file_name: str,
+    mime_type: str,  # CSAK AZ API-NÉZET MIATT
+    file_size: int,  # CSAK AZ API-NÉZET MIATT
 ):
     """
     Document AI hívás újrapróbálással.
@@ -178,18 +237,54 @@ async def _call_process_document_with_retry(
                 await asyncio.sleep(wait)
 
         async with _docai_lock:
+            started = time.perf_counter()
             try:
                 response = await asyncio.to_thread(
                     client.process_document,
                     request=request,
                 )
                 _docai_last_finished = time.monotonic()
+                # CSAK AZ API-NÉZET MIATT – a válasz feldolgozása ez alatt, a return-nél folytatódik
+                try:
+                    response_summary = _docai_response_summary(response.document)
+                except Exception as summary_exc:
+                    logger.warning(f"Document AI válasz kivonata nem készült el: {summary_exc}")
+                    response_summary = {"note": "A válasz megérkezett, a kivonat nem készült el."}
+                record_api_call(
+                    service="Document AI",
+                    operation="processDocument",
+                    status="ok",
+                    duration_ms=int((time.perf_counter() - started) * 1000),
+                    request=_docai_request_summary(file_name, mime_type, file_size, attempt),
+                    response=response_summary,
+                )
                 return response
             except _RETRIABLE_DOCAI_ERRORS as exc:
                 last_error = exc
                 _docai_last_finished = time.monotonic()
+                # CSAK AZ API-NÉZET MIATT
+                record_api_call(
+                    service="Document AI",
+                    operation="processDocument",
+                    status="error",
+                    duration_ms=int((time.perf_counter() - started) * 1000),
+                    request=_docai_request_summary(file_name, mime_type, file_size, attempt),
+                    error=str(exc),
+                )
                 if attempt >= max_retries:
                     break
+            except Exception as exc:
+                _docai_last_finished = time.monotonic()
+                # CSAK AZ API-NÉZET MIATT
+                record_api_call(
+                    service="Document AI",
+                    operation="processDocument",
+                    status="error",
+                    duration_ms=int((time.perf_counter() - started) * 1000),
+                    request=_docai_request_summary(file_name, mime_type, file_size, attempt),
+                    error=str(exc),
+                )
+                raise
 
         wait_seconds = min(base_delay * (2 ** (attempt - 1)), 16)
         logger.warning(
@@ -221,7 +316,13 @@ async def process_document(file_path: str, file_name: str) -> tuple[InvoiceData,
 
     logger.info(f"Document AI feldolgozás elindítva: {file_name}")
     client = get_client()
-    response = await _call_process_document_with_retry(client, request, file_name)
+    response = await _call_process_document_with_retry(
+        client,
+        request,
+        file_name,
+        mime_type,  # CSAK AZ API-NÉZET MIATT
+        len(file_content),  # CSAK AZ API-NÉZET MIATT
+    )
 
     document = response.document
     entities = document.entities

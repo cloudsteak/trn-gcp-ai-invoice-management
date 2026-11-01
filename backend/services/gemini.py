@@ -2,6 +2,7 @@
 # Vertex AI + ADC (Application Default Credentials) – nincs szükség GEMINI_API_KEY-re
 import asyncio
 import json
+import time  # CSAK AZ API-NÉZET MIATT – a hívás időtartama a panelen
 from typing import Optional
 
 from google import genai
@@ -10,6 +11,7 @@ from google.genai import types
 from config import settings
 from models.invoice import InvoiceData
 from models.result import ValidationIssue, InvoiceStatus
+from utils.api_trace import clip_text, record_api_call  # CSAK AZ API-NÉZET MIATT
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -104,6 +106,42 @@ def _parse_gemini_response(response_text: str) -> tuple[dict, list[ValidationIss
     return filled_fields, issues, summary
 
 
+# --- CSAK AZ API-NÉZET MIATT ---
+# A generateContent hívás olvasható másolata. A Gemini kérést nem módosítja.
+def _gemini_request(user_prompt: str, attempt: int) -> dict:
+    """A generateContent hívás oktatási másolata."""
+    location = settings.gemini_location
+    model = settings.gemini_model
+    project = settings.gcp_project_id
+    host = "aiplatform.googleapis.com" if location == "global" else f"{location}-aiplatform.googleapis.com"
+    return {
+        "method": "POST",
+        "endpoint": (
+            f"https://{host}/v1/projects/{project}/locations/{location}"
+            f"/publishers/google/models/{model}:generateContent"
+        ),
+        "model": model,
+        "config": {
+            "system_instruction": SYSTEM_PROMPT,
+            "response_mime_type": "application/json",
+            "temperature": 0.1,
+        },
+        "contents": clip_text(user_prompt, 6000),
+        "attempt": attempt,
+    }
+
+
+def _gemini_response_body(response_text: str) -> dict:
+    """Gemini válasz – JSON objektumként, ha értelmezhető."""
+    try:
+        return {"body": json.loads(response_text)}
+    except json.JSONDecodeError:
+        return {"body": clip_text(response_text, 8000)}
+
+
+# --- API-NÉZET VÉGE ---
+
+
 async def _call_gemini_api(client: genai.Client, user_prompt: str) -> str:
     """Gemini hívás külön szálban – ne blokkolja az event loopot."""
     response = await asyncio.to_thread(
@@ -144,16 +182,38 @@ Kérlek, ellenőrizd és egészítsd ki a fenti adatokat! A már kitöltött mez
 
     last_error = None
     for attempt in range(retry_count + 1):
+        attempt_no = attempt + 1
+        started = time.perf_counter()
+        response_text = None
         try:
-            logger.info(f"Gemini validáció indítva (kísérlet: {attempt + 1})")
+            logger.info(f"Gemini validáció indítva (kísérlet: {attempt_no})")
             response_text = await _call_gemini_api(client, user_prompt)
             filled_fields, issues, summary = _parse_gemini_response(response_text)
+            # CSAK AZ API-NÉZET MIATT
+            record_api_call(
+                service="Gemini",
+                operation="generateContent",
+                status="ok",
+                duration_ms=int((time.perf_counter() - started) * 1000),
+                request=_gemini_request(user_prompt, attempt_no),
+                response=_gemini_response_body(response_text),
+            )
             logger.info("Gemini validáció sikeres")
             return GeminiValidationResult(filled_fields, issues, summary)
 
         except Exception as e:
             last_error = e
-            logger.warning(f"Gemini API hiba (kísérlet {attempt + 1}): {e}")
+            # CSAK AZ API-NÉZET MIATT
+            record_api_call(
+                service="Gemini",
+                operation="generateContent",
+                status="error",
+                duration_ms=int((time.perf_counter() - started) * 1000),
+                request=_gemini_request(user_prompt, attempt_no),
+                response=_gemini_response_body(response_text) if response_text else None,
+                error=str(e),
+            )
+            logger.warning(f"Gemini API hiba (kísérlet {attempt_no}): {e}")
 
     logger.error(f"Gemini API végleg sikertelen: {last_error}")
     error_issue = ValidationIssue(
