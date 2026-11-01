@@ -1,19 +1,34 @@
 // Főalkalmazás komponens – az oldalfelépítés és állapotkezelés összefogója
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react'; // useEffect: CSAK AZ API-NÉZET MIATT
 import UploadZone from './components/UploadZone.jsx';
 import FileList from './components/FileList.jsx';
 import ProcessButton from './components/ProcessButton.jsx';
 import ResultTable from './components/ResultTable.jsx';
 import ExportBar from './components/ExportBar.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
+import ApiTracePanel, { ApiTraceToggle } from './components/ApiTracePanel.jsx'; // CSAK AZ API-NÉZET MIATT
 import { useProcessing } from './hooks/useProcessing.js';
 import { useUpload } from './hooks/useUpload.js';
+import { useCallLog } from './hooks/useCallLog.js'; // CSAK AZ API-NÉZET MIATT
 import { deleteUploadedFiles } from './services/api.js';
+
+// CSAK AZ API-NÉZET MIATT – megjegyzi, hogy a híváspanel nyitva volt-e
+const TRACE_STORAGE_KEY = 'showApiCalls';
 
 function App() {
   const { uploadedFiles, addFiles, removeFile, clearFiles } = useUpload();
+  // CSAK AZ API-NÉZET MIATT – a panel nyitva/zárva állapota és a rögzített hívások
+  const apiCalls = useCallLog();
+  const [showApiCalls, setShowApiCalls] = useState(
+    () => sessionStorage.getItem(TRACE_STORAGE_KEY) === '1'
+  );
   const [clearing, setClearing] = useState(false);
   const [clearError, setClearError] = useState(null);
+
+  // CSAK AZ API-NÉZET MIATT
+  useEffect(() => {
+    sessionStorage.setItem(TRACE_STORAGE_KEY, showApiCalls ? '1' : '0');
+  }, [showApiCalls]);
 
   const {
     status,
@@ -47,20 +62,31 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Fejléc */}
-      <header className="bg-blue-700 text-white shadow-md">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
-          <span className="text-2xl">📄</span>
-          <h1 className="text-xl font-bold tracking-tight">
+      {/* sticky fejléc: CSAK AZ API-NÉZET MIATT, hogy a híváspanel alatta maradjon */}
+      <header className="bg-blue-700 text-white shadow-md sticky top-0 z-30">
+        <div className={`mx-auto px-4 h-16 flex items-center gap-3 ${showApiCalls ? 'max-w-none' : 'max-w-6xl'}`}>
+          <span className="text-2xl shrink-0" aria-hidden="true">📄</span>
+          <h1 className="text-xl font-bold tracking-tight truncate">
             Intelligens Számlafeldolgozó
           </h1>
-          <span className="text-blue-300 text-sm ml-auto">
-            Google Cloud Document AI + Gemini
-          </span>
+          <div className="ml-auto flex items-center gap-4 shrink-0">
+            {/* CSAK AZ API-NÉZET MIATT – kikapcsolva a panel nem látszik */}
+            <ApiTraceToggle
+              pressed={showApiCalls}
+              count={apiCalls.length}
+              onToggle={() => setShowApiCalls((open) => !open)}
+            />
+            <span className="text-blue-200 text-sm hidden lg:inline">
+              Google Cloud Document AI + Gemini
+            </span>
+          </div>
         </div>
       </header>
 
-      {/* Fő tartalom */}
-      <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      {/* CSAK AZ API-NÉZET MIATT – nyitott panelnél a lista a tartalom mellé kerül */}
+      <div className={showApiCalls ? 'flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]' : ''}>
+      {/* Fő tartalom. Az order-* osztály CSAK AZ API-NÉZET MIATT van itt, nyitott panelnél. */}
+      <main className={`mx-auto px-4 py-8 space-y-6 ${showApiCalls ? 'order-2 lg:order-1 max-w-none' : 'max-w-6xl'}`}>
         {/* Feltöltési szekció */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">
@@ -121,6 +147,10 @@ function App() {
           </section>
         )}
       </main>
+
+      {/* CSAK AZ API-NÉZET MIATT */}
+      {showApiCalls && <ApiTracePanel calls={apiCalls} />}
+      </div>
 
       {/* Lábléc */}
       <footer className="text-center text-gray-400 text-xs py-6">

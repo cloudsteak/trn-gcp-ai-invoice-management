@@ -1,6 +1,7 @@
 // Feldolgozás állapotkezelő hook – fájlonként sorban, eredmény azonnal megjelenik
 import { useState, useRef, useCallback } from 'react';
 import { startProcessing as apiStartProcessing, getProcessingStatus } from '../services/api.js';
+import { logBackendAiCalls } from '../services/callLog.js'; // CSAK AZ API-NÉZET MIATT
 
 const POLL_INTERVAL_MS = 1500;
 // Szünet két fájl között – Document AI kvóta pihenő
@@ -33,10 +34,16 @@ async function waitForJob(jobId) {
 async function processOneFile(fileId) {
   const { job_id } = await apiStartProcessing([fileId]);
   const jobData = await waitForJob(job_id);
+  const result = jobData.results?.[0] ?? null;
+  // CSAK AZ API-NÉZET MIATT – a Document AI / Gemini hívások a panelre kerülnek.
+  // A result többi mezője a táblázaté, ezt a blokkot ki lehet venni.
+  if (result?.api_calls?.length) {
+    logBackendAiCalls(result.file_name, result.api_calls);
+  }
   if (jobData.status === 'error') {
     throw new Error('Feldolgozási hiba a szerveren');
   }
-  return jobData.results?.[0] ?? null;
+  return result;
 }
 
 export function useProcessing() {
