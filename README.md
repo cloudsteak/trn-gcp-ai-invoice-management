@@ -184,7 +184,7 @@ flowchart TB
 
 | Eszköz | Miért kell? |
 |--------|-------------|
-| **Node.js** 20+ | Frontend futtatásához és buildhez |
+| **Node.js** 24.22.2 | Frontend futtatásához és buildhez. A 24.22.1-ben javított, 2026. október 21-i sebezhetőségek (többek között a Brotli dekóder) miatt ennél régebbi Node nem elég. |
 | **uv** ([telepítés](https://docs.astral.sh/uv/)) | Backend függőségek kezelése |
 | **gcloud CLI** | GCP infrastruktúra (`setup.sh`) és helyi ADC auth |
 | **GCP projekt** | Document AI + Cloud Run + Secret Manager |
