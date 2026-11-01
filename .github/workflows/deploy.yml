@@ -69,7 +69,7 @@ jobs:
             --quiet \
             --service-account "${RUNTIME_SA}" \
             --build-service-account "projects/${PROJECT_ID}/serviceAccounts/${CICD_SA}" \
-            --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=eu,GEMINI_MODEL=gemini-3.1-flash-lite,GEMINI_LOCATION=global,MAX_FILE_SIZE_MB=20,MAX_FILES_PER_BATCH=10,UPLOAD_DIR=/tmp/invoices,CORS_ORIGINS=*" \
+            --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=eu,GEMINI_MODEL=gemini-3.5-flash-lite,GEMINI_LOCATION=global,MAX_FILE_SIZE_MB=20,MAX_FILES_PER_BATCH=10,UPLOAD_DIR=/tmp/invoices,CORS_ORIGINS=*" \
             --set-secrets="GCP_PROCESSOR_ID=invoice-gcp-processor-id:latest"
 
   deploy-frontend:

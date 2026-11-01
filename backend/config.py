@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     gcp_processor_id: str
 
     # --- Gemini (Vertex AI + ADC – nincs API kulcs) ---
-    gemini_model: str = "gemini-3.1-flash-lite"
+    gemini_model: str = "gemini-3.5-flash-lite"
     gemini_location: str = "global"
 
     # --- Fájlkezelés (módosítható a GCP Console-on, vesszővel elválasztott string) ---

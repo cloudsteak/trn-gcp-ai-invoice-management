@@ -101,7 +101,7 @@ fi
 
 # Variables – deploy.yml alapertelmezesei (csak ha nem --secrets-only)
 VAR_GCP_LOCATION="${GCP_LOCATION:-eu}"
-VAR_GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-flash-lite}"
+VAR_GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash-lite}"
 VAR_GEMINI_LOCATION="${GEMINI_LOCATION:-global}"
 VAR_MAX_FILE_SIZE_MB="${MAX_FILE_SIZE_MB:-20}"
 VAR_MAX_FILES_PER_BATCH="${MAX_FILES_PER_BATCH:-10}"

@@ -171,7 +171,7 @@ fi
 echo ""
 echo "GitHub Variables (opcionalis, alapertelmezett ertekek a deploy.yml-ben):"
 echo "  GCP_LOCATION=eu"
-echo "  GEMINI_MODEL=gemini-3.1-flash-lite"
+echo "  GEMINI_MODEL=gemini-3.5-flash-lite"
 echo ""
 echo "A JSON kulcs nem szukseges – a deploy.yml Workload Identity Federation-t hasznal."
 echo ""
