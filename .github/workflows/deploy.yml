@@ -124,4 +124,4 @@ jobs:
             --quiet \
             --service-account "${RUNTIME_SA}" \
             --build-service-account "projects/${PROJECT_ID}/serviceAccounts/${CICD_SA}" \
-            --set-build-env-vars="VITE_API_BASE_URL=${{ steps.backend.outputs.url }}"
+            --set-build-env-vars="VITE_API_BASE_URL=${{ steps.backend.outputs.url }},GOOGLE_NODEJS_VERSION=24.22.2"
